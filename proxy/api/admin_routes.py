@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import inspect
 import ipaddress
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -13,12 +16,15 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from api.models.anthropic import MessagesRequest
 from config.model_quality import quality_for
 from config.model_refs import parse_provider_type
+from config.paths import config_dir_path
 from config.provider_catalog import PROVIDER_CATALOG
 from config.provider_ids import SUPPORTED_PROVIDER_IDS
 from config.settings import Settings
 from config.settings import get_settings as get_cached_settings
+from core.model_probe import PROBE_FILENAME, ProbeStore, classify_probe
 from providers.runtime import ProviderRuntime
 
 from .admin_config.manifest import FIELD_BY_KEY
@@ -319,11 +325,9 @@ async def admin_models(request: Request):
     runtime = getattr(request.app.state, "provider_runtime", None)
     cached: dict[str, list[str]] = {}
     if isinstance(runtime, ProviderRuntime):
-        cached = {
-            pid: sorted(ids) for pid, ids in runtime.cached_model_ids().items()
-        }
+        cached = {pid: sorted(ids) for pid, ids in runtime.cached_model_ids().items()}
 
-    health = (maybe_health_store(request.app) or None)
+    health = maybe_health_store(request.app) or None
     health_snap = health.snapshot() if health is not None else {}
     quota = maybe_quota_governor(request.app)
     quota_snap = quota.snapshot() if quota is not None else {}
@@ -335,6 +339,7 @@ async def admin_models(request: Request):
     fallbacks = _model_refs(settings.model_fallbacks)
     favourites = _model_refs(settings.favourite_models)
     status_by_provider = {e["provider_id"]: e for e in provider_config_status()}
+    probes = _probe_store(request).snapshot()
 
     def _provider_usable(pid: str, configured: bool) -> tuple[bool, str]:
         """Whether requests to this provider should currently succeed, + why not."""
@@ -367,6 +372,7 @@ async def admin_models(request: Request):
         usable, reason = _provider_usable(pid, configured)
         models = [
             _model_entry(pid, mid, current, fallbacks, favourites, usable)
+            | {"probe": probes.get(f"{pid}/{mid}")}
             for mid in cached.get(pid, [])
         ]
         providers.append(
@@ -378,7 +384,9 @@ async def admin_models(request: Request):
                 "usable_reason": reason,
                 "credential_url": descriptor.credential_url if descriptor else None,
                 "credential_env": descriptor.credential_env if descriptor else None,
-                "is_local": bool(descriptor and descriptor.static_credential is not None),
+                "is_local": bool(
+                    descriptor and descriptor.static_credential is not None
+                ),
                 "health": health_snap.get(pid),
                 "quota": quota_snap.get(pid),
                 "circuit": circuit_snap.get(pid),
@@ -400,7 +408,9 @@ async def admin_models(request: Request):
     # changed from the UI — apply writes .env but the locked source shadows it. Surface
     # that so the Models page can explain instead of silently no-op'ing "Use".
     value_state = load_value_state()
-    model_locked = is_locked_source(value_state.get("MODEL", {}).get("source", "default"))
+    model_locked = is_locked_source(
+        value_state.get("MODEL", {}).get("source", "default")
+    )
     fallbacks_locked = is_locked_source(
         value_state.get("MODEL_FALLBACKS", {}).get("source", "default")
     )
@@ -461,6 +471,78 @@ async def test_provider(provider_id: str, request: Request):
         "provider_id": provider_id,
         "ok": True,
         "models": sorted(info.model_id for info in infos),
+    }
+
+
+class PingModelPayload(BaseModel):
+    provider_id: str
+    model_id: str
+
+
+def _probe_store(request: Request) -> ProbeStore:
+    store = getattr(request.app.state, "model_probes", None)
+    if not isinstance(store, ProbeStore):
+        store = ProbeStore(config_dir_path() / PROBE_FILENAME)
+        request.app.state.model_probes = store
+    return store
+
+
+async def _ping_model(
+    runtime: ProviderRuntime, provider_id: str, model_id: str, timeout: float = 12.0
+) -> dict[str, Any]:
+    """Send a minimal request to one model and classify the result (live/down)."""
+    started = perf_counter()
+    try:
+        provider = runtime.resolve_provider(provider_id)
+    except Exception as exc:  # provider not built (e.g. missing credential)
+        return classify_probe([], exc) | {"latency_ms": None}
+
+    request_body = MessagesRequest.model_validate(
+        {
+            "model": model_id,
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "ping"}],
+            "stream": True,
+        }
+    )
+    chunks: list[str] = []
+    raised: BaseException | None = None
+    iterator = None
+    try:
+        async with asyncio.timeout(timeout):
+            iterator = provider.stream_response(
+                request_body,
+                input_tokens=1,
+                request_id="probe",
+                thinking_enabled=False,
+            )
+            async for chunk in iterator:
+                chunks.append(chunk)
+                if len(chunks) >= 8:  # max_tokens=1 keeps this tiny; cap just in case
+                    break
+    except Exception as exc:
+        raised = exc
+    finally:
+        aclose = getattr(iterator, "aclose", None)
+        if aclose is not None:
+            with contextlib.suppress(Exception):
+                await aclose()
+    verdict = classify_probe(chunks, raised)
+    verdict["latency_ms"] = round((perf_counter() - started) * 1000)
+    return verdict
+
+
+@router.post("/admin/api/models/ping")
+async def ping_model(payload: PingModelPayload, request: Request):
+    require_loopback_admin(request)
+    settings = get_cached_settings()
+    runtime = _provider_runtime_for_admin(request, settings)
+    result = await _ping_model(runtime, payload.provider_id, payload.model_id)
+    entry = _probe_store(request).record(payload.provider_id, payload.model_id, result)
+    return {
+        "provider_id": payload.provider_id,
+        "model_id": payload.model_id,
+        "probe": entry,
     }
 
 

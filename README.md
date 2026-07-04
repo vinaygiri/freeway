@@ -21,6 +21,7 @@ Freeway fixes all of that from **one local endpoint**:
 - 🔌 **One endpoint, every tool** — accepts Claude Code's Anthropic protocol *and* Codex's / OpenAI's, and speaks to ~20 providers behind the scenes.
 - ⛽ **Make free last** — quota‑aware routing + multi‑key rotation stretch free tiers and route *away* from a provider before it rate‑limits.
 - 🧠 **Smart routing** — health/latency/context‑aware model selection with automatic fallback chains and per‑message `@`‑directives.
+- 🔬 **Know what's really live** — one‑click per‑model verification pings each model for real (✓ live + latency / ✗ down + reason) and saves the result, so "ready" isn't just a guess.
 - 🩹 **Auto‑fit (the 413 fix)** — when a request exceeds a provider's token budget, Freeway trims the largest non‑essential tools until it fits, keeping the core coding tools.
 - 🔒 **Trust & glass‑box** — data‑governance rules (never send code to training providers) + a full request inspector so you can *see* every routing decision.
 - 🖥️ **Everything in a UI** — a local control center at `/admin` where every setting is editable and every feature is visible. No hand‑editing config files.
@@ -33,7 +34,7 @@ Freeway fixes all of that from **one local endpoint**:
 
 ![Freeway Dashboard](docs/screenshots/dashboard.png)
 
-**Models** — every model you can route to, ranked by quality (SWE‑bench) with live status & latency. Sort by Quality / Latency / Name, filter by Ready / All / ★ Favs, star favourites, and pick one (or add fallbacks) with a click.
+**Models** — every model you can route to, ranked by quality (SWE‑bench) with live status & latency. Sort by Quality / Latency / Name, filter by Ready / All / ★ Favs, star favourites, and pick one (or add fallbacks) with a click. **⚡ Verify all** (or a model's **Test**) pings each model for real and marks it ✓ verified / ✗ down — saved until you re‑check.
 
 ![Freeway Models picker](docs/screenshots/models.png)
 
@@ -90,7 +91,7 @@ Everything is configurable and observable from one loopback‑only UI served by 
 | Group | Page | What it does |
 |---|---|---|
 | **Monitor** | Dashboard | Live status: running?, active model, providers ready, cache hit‑rate. |
-| | Models | The picker — all routable models with tier/SWE/latency, favourites, sort, one‑click *Use* / *+Fallback*. |
+| | Models | The picker — all routable models with tier/SWE/latency, favourites, sort, filter, one‑click *Use* / *+Fallback*, and per‑model *Verify* (real ping). |
 | | Activity | Every request: provider used, was‑fallback, downgrade reason, outcome. |
 | | Limits | Free‑tier token usage vs each provider's per‑minute budget. |
 | | Health | Live provider stability + latency from background probes. |
@@ -110,6 +111,7 @@ Everything is configurable and observable from one loopback‑only UI served by 
 - **Auto‑failover.** If your model's provider is down or rate‑limited, Freeway automatically tries the next model in your chain.
 - **`@`‑Directives.** Define aliases like `fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b`, then type `@big refactor this` to route that one message to Cerebras.
 - **Auto‑fit.** Set a token budget under your provider's per‑minute limit; Freeway drops the largest non‑essential tools until the request fits (core coding tools always kept).
+- **"Ready" vs "Verified".** *Ready* is provider‑level and optimistic (a healthy provider marks all its models ready). *Verified* is a real per‑model ping via **⚡ Verify all** / **Test** — ✓ live + latency or ✗ down + reason, saved until you re‑check. Actual availability is otherwise proven at request time by failover.
 
 ---
 

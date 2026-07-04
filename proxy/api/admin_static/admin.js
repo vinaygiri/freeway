@@ -350,9 +350,16 @@ async function renderModels() {
     const legend = el("div", "legend");
     legend.append(badge("ready", "ok"), badge("needs key", "warn"), badge("unavailable", "error"), badge("↩ fallback", "fallback"));
     toolbar.appendChild(legend);
+    const verifyWrap = el("div", "fav-slot");
+    const verifyBtn = el("button", "primary-button small", "⚡ Verify all");
+    verifyBtn.id = "verifyAllBtn";
+    verifyBtn.title = "Ping every model shown to check it's actually live (sends a tiny request to each — uses a little quota). Results are saved.";
+    verifyBtn.addEventListener("click", verifyVisibleModels);
+    verifyWrap.appendChild(verifyBtn);
+    toolbar.appendChild(verifyWrap);
     body.appendChild(toolbar);
     body.appendChild(el("p", "models-help",
-      "Show → Ready: models you can route to right now (key set and not blocked, rate-limited, or down)  ·  All: every provider, including ones that still need a key  ·  ★ Favs: your starred models."));
+      "Show → Ready: models whose provider is currently usable  ·  All: every provider, including ones that still need a key  ·  ★ Favs: your starred models.  “ready” is provider-level (optimistic) — click ⚡ Verify all, or a model's Test, to ping each one. Tested models regroup by real result: ✓ verified, ⏳ Busy (rate-limited / overloaded — retry later), or ✗ Verified down. Results are saved."));
     body.appendChild(el("p", "models-help",
       "★ Favourite = a personal shortlist/bookmark (doesn't change routing on its own — use the ★ Favs filter to find them fast). Fallback = routing safety net: if your primary model's provider is down or rate-limited, Freeway tries the fallback chain in order. “Use” sets the primary model  ·  “+ Fallback” / “✓ Fallback” adds or removes a model from the chain."));
     const list = el("div", "models-list");
@@ -384,8 +391,13 @@ function paintModels() {
 
   const cmp = modelComparator();
   const favs = rows.filter((r) => r.m.is_favourite).sort(cmp);
-  const ready = rows.filter((r) => !r.m.is_favourite && r.p.usable).sort(cmp);
-  const other = rows.filter((r) => !r.m.is_favourite && !r.p.usable).sort(cmp);
+  const nonFav = rows.filter((r) => !r.m.is_favourite);
+  // A tested model's real result wins over the provider-level "ready": live/untested
+  // stay Ready; 429/overload are temporary (Busy); the rest are Verified down.
+  const ready = nonFav.filter((r) => rowBucket(r) === "ready").sort(cmp);
+  const busy = nonFav.filter((r) => rowBucket(r) === "busy").sort(cmp);
+  const down = nonFav.filter((r) => rowBucket(r) === "down").sort(cmp);
+  const other = nonFav.filter((r) => rowBucket(r) === "other").sort(cmp);
 
   // Providers with no discovered models (can't be listed without a working key) —
   // shown as status rows in "All" mode so every provider is visible.
@@ -394,16 +406,17 @@ function paintModels() {
     .sort((a, b) => Number(b.configured) - Number(a.configured) || (a.display_name || "").localeCompare(b.display_name || ""));
 
   const filter = state.modelFilter;
-  const showFavs = filter === "favourites" || filter === "all" || filter === "ready";
-  const showReady = filter === "all" || filter === "ready";
-  const showOther = filter === "all" || filter === "ready";
-  const showNoModels = filter === "all";
+  const isFav = filter === "favourites";
 
   const printed = [];
-  if (showFavs && favs.length) printed.push(modelGroup("★ Favourites", favs, data));
-  if (showReady && ready.length) printed.push(modelGroup("Ready to use", ready, data));
-  if (showOther && other.length) printed.push(modelGroup("Discovered · needs a working key", other, data));
-  if (showNoModels && noModels.length) printed.push(providerStatusGroup(noModels));
+  if (favs.length) printed.push(modelGroup("★ Favourites", favs, data));
+  if (!isFav) {
+    if (ready.length) printed.push(modelGroup("Ready to use", ready, data));
+    if (busy.length) printed.push(modelGroup("Busy — retry later", busy, data));
+    if (down.length) printed.push(modelGroup("Verified down", down, data));
+    if (other.length) printed.push(modelGroup("Needs setup / unavailable", other, data));
+    if (filter === "all" && noModels.length) printed.push(providerStatusGroup(noModels));
+  }
 
   if (!printed.length) {
     if (filter === "favourites") {
@@ -456,6 +469,34 @@ function latencyOf(provider) {
   const v = provider.health && (provider.health.p95_ms ?? provider.health.avg_ms);
   return v == null ? Infinity : v;
 }
+
+// Which Models group a row belongs to. A live test result overrides the optimistic
+// provider-level "ready"; rate-limit/overload are temporary ("busy"); other
+// failures are "down"; untested rows fall back to provider usability.
+function rowBucket(r) {
+  const pr = r.m.probe;
+  if (pr) {
+    if (pr.status === "live") return "ready";
+    if (pr.kind === "rate_limited" || pr.kind === "overloaded") return "busy";
+    return "down";
+  }
+  return r.p.usable ? "ready" : "other";
+}
+
+const PROBE_BADGE = {
+  rate_limited: ["warn", "⏳ rate-limited"],
+  overloaded: ["warn", "◔ overloaded"],
+  unavailable: ["error", "✗ unavailable"],
+  unreachable: ["neutral", "⚠ unreachable"],
+  error: ["error", "✗ error"],
+};
+function probeBadge(probe) {
+  if (probe.status === "live") return badge(`✓ verified ${probe.latency_ms}ms`, "ok");
+  const [kind, label] = PROBE_BADGE[probe.kind] || PROBE_BADGE.error;
+  const b = badge(label, kind);
+  if (probe.error) b.title = probe.error;
+  return b;
+}
 function modelComparator() {
   const s = state.modelSort;
   if (s === "latency") return (a, b) => latencyOf(a.p) - latencyOf(b.p) || (b.m.score_num ?? -1) - (a.m.score_num ?? -1);
@@ -473,6 +514,8 @@ function modelGroup(title, rows, data) {
 function modelCard(p, m, data) {
   const ref = `${p.provider_id}/${m.id}`;
   const card = el("div", `model-card${m.is_current ? " current" : ""}${m.is_fallback ? " is-fallback" : ""}`);
+  card.dataset.provider = p.provider_id;
+  card.dataset.model = m.id;
 
   const star = el("button", `star${m.is_favourite ? " on" : ""}`, m.is_favourite ? "★" : "☆");
   star.title = m.is_favourite ? "Unfavourite" : "Favourite";
@@ -487,12 +530,16 @@ function modelCard(p, m, data) {
   info.appendChild(nameRow);
   const sub = el("div", "model-sub");
   sub.appendChild(el("span", "model-provider", p.display_name));
-  sub.appendChild(p.usable ? badge("ready", "ok") : badge(p.usable_reason || "unavailable", p.configured ? "error" : "warn"));
+  // A per-model test result (if any) is authoritative and replaces the optimistic
+  // provider-level "ready" badge.
+  if (m.probe) sub.appendChild(probeBadge(m.probe));
+  else sub.appendChild(p.usable ? badge("ready", "ok") : badge(p.usable_reason || "unavailable", p.configured ? "error" : "warn"));
   if (m.tier) sub.appendChild(badge(m.tier, tierKind(m.tier)));
   if (m.swe_score && m.swe_score !== "-") sub.appendChild(el("span", "model-meta", `SWE ${m.swe_score}`));
   if (m.context) sub.appendChild(el("span", "model-meta", m.context));
   const lat = p.health && (p.health.p95_ms ?? p.health.avg_ms);
   if (lat != null) sub.appendChild(el("span", "model-meta latency", `⚡ ${lat}ms`));
+  if (m.probe) sub.appendChild(el("span", "model-meta", `tested ${agoText(m.probe.at)}`));
   info.appendChild(sub);
   card.appendChild(info);
 
@@ -513,9 +560,69 @@ function modelCard(p, m, data) {
     fb.title = "Add to fallback chain";
   }
   fb.addEventListener("click", () => toggleFallback(ref, m.is_fallback));
-  actions.append(use, fb);
+  const test = el("button", "mini-button ghost", "Test");
+  test.title = "Ping this model now to check it's actually live";
+  test.addEventListener("click", () => testModel(p.provider_id, m.id));
+  actions.append(use, fb, test);
   card.appendChild(actions);
   return card;
+}
+
+function agoText(epochSeconds) {
+  if (!epochSeconds) return "just now";
+  const secs = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return `${Math.floor(secs / 86400)}d ago`;
+}
+
+function applyProbe(providerId, modelId, probe) {
+  const data = state.modelsData;
+  if (!data) return;
+  const p = data.providers.find((x) => x.provider_id === providerId);
+  const m = p && (p.models || []).find((x) => x.id === modelId);
+  if (m) m.probe = probe;
+}
+
+async function testModel(providerId, modelId) {
+  const ref = `${providerId}/${modelId}`;
+  showMessage(`Testing ${ref}…`);
+  try {
+    const res = await api("/admin/api/models/ping", { method: "POST", body: JSON.stringify({ provider_id: providerId, model_id: modelId }) });
+    applyProbe(providerId, modelId, res.probe);
+    paintModels();
+    const live = res.probe && res.probe.status === "live";
+    showMessage(live ? `${ref} is live (${res.probe.latency_ms}ms)` : `${ref} is down: ${(res.probe && res.probe.error) || "unknown"}`, live ? "ok" : "error");
+  } catch (e) {
+    showMessage(`Test failed: ${e.message}`, "error");
+  }
+}
+
+async function verifyVisibleModels() {
+  const cards = [...document.querySelectorAll("#modelsList .model-card[data-model]")];
+  const targets = cards.map((c) => ({ provider_id: c.dataset.provider, model_id: c.dataset.model }));
+  if (!targets.length) { showMessage("No models to verify in this view.", ""); return; }
+  if (targets.length > 40 && !confirm(`Verify ${targets.length} models now? This sends a tiny request to each and uses a little quota.`)) return;
+  const btn = byId("verifyAllBtn");
+  if (btn) { btn.disabled = true; }
+  let done = 0, live = 0, down = 0, idx = 0;
+  const worker = async () => {
+    while (idx < targets.length) {
+      const t = targets[idx++];
+      try {
+        const res = await api("/admin/api/models/ping", { method: "POST", body: JSON.stringify(t) });
+        applyProbe(t.provider_id, t.model_id, res.probe);
+        if (res.probe && res.probe.status === "live") live++; else down++;
+      } catch { down++; }
+      done++;
+      showMessage(`Verifying models…  ${done}/${targets.length}   (✓ ${live} live · ✗ ${down} down)`, "");
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, targets.length) }, worker));
+  paintModels();
+  if (btn) { btn.disabled = false; }
+  showMessage(`Verified ${targets.length}:  ✓ ${live} live · ✗ ${down} down`, down ? "warn" : "ok");
 }
 
 async function applyValues(values, note) {
@@ -739,7 +846,7 @@ async function renderHelp() {
         <thead><tr><th>Page</th><th>What it's for</th></tr></thead>
         <tbody>
           <tr><td><strong>Dashboard</strong></td><td>At-a-glance: is Freeway running, active model, providers ready, cache hit-rate.</td></tr>
-          <tr><td><strong>Models</strong></td><td>The picker. Every model you can route to + live status. Sort by Quality/Latency/Name, filter by Ready/All/★ Favs, star favourites, one-click <em>Use</em> / <em>+Fallback</em>.</td></tr>
+          <tr><td><strong>Models</strong></td><td>The picker. Every model you can route to + live status. Sort by Quality/Latency/Name, filter by Ready/All/★ Favs, star favourites, one-click <em>Use</em> / <em>+Fallback</em>. <em>“ready”</em> is provider-level; use <em>⚡ Verify all</em> or a model's <em>Test</em> to ping each model for real (results are saved).</td></tr>
           <tr><td><strong>Activity</strong></td><td>Recent requests: which provider served each, whether it fell back, and why.</td></tr>
           <tr><td><strong>Limits</strong></td><td>Free-tier token usage vs each provider's per-minute budget.</td></tr>
           <tr><td><strong>Health</strong></td><td>Live provider stability + latency from background probes.</td></tr>
@@ -769,6 +876,13 @@ async function renderHelp() {
       <p>Free tiers cap tokens-per-minute; editors send every tool's schema on every request. Set
       <em>Routing → Auto-fit Budget</em> a bit under your provider's limit and Freeway drops the largest
       non-essential tools until the request fits. Core coding tools are always kept.</p></div>
+      <div class="guide-concept"><h4>“Ready” vs “Verified”</h4>
+      <p><strong>Ready</strong> is <em>provider-level</em>: if a provider's key works and it isn't rate-limited,
+      down, or circuit-broken, all of its models show ready — an optimistic count, not a per-model test.
+      To confirm an individual model, hit <em>⚡ Verify all</em> (pings every shown model) or a model's <em>Test</em>.
+      Each tested model then regroups by its real result: <strong>✓ verified</strong> (Ready), <strong>⏳ Busy — retry later</strong>
+      (rate-limited or overloaded — temporary), or <strong>✗ Verified down</strong> (unavailable / no key / unreachable).
+      Results are saved until you re-check; real availability is otherwise proven at request time by failover.</p></div>
     </section>
 
     <section class="guide-card">

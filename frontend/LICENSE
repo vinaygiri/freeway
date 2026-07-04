@@ -1,0 +1,71 @@
+MIT License with Enhanced Disclaimers
+
+Copyright (c) 2025-2026 vava-nessa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+GLOBAL DISCLAIMERS, PROVIDER GUARDRAILS & LIMITATION OF LIABILITY
+(DISCORDANCE, GARDE-FOUS PROVIDERS ET LIMITATION DE RESPONSABILITÉ)
+
+1. TRADEMARK, NOMINATIVE USE & NO AFFILIATION
+This software is an independent, community-developed open-source tool. It is NOT affiliated with, endorsed by, sponsored by, authorized by, or in any way officially connected with any of the third-party service providers referenced herein, including but not limited to: NVIDIA Corporation, Groq Inc., Cerebras Systems, SambaNova Systems Inc., Google LLC, GitHub Inc., Microsoft Corporation, Mistral AI, Alibaba Group, Cloudflare Inc., OVHcloud, Moonshot AI, MiniMax, or any other LLM provider.
+- All product names, logos, brands, and trademarks are the property of their respective owners. Their use in this software is strictly for descriptive and nominative purposes to indicate technical compatibility.
+- Nothing in this software or license shall be construed as creating a joint venture, partnership, agency, or employment relationship between the author and any third-party provider.
+- The author makes no claims of intellectual property over any provider's technology, branding, or services.
+
+2. COMPLIANCE WITH PROVIDER TERMS OF SERVICE (ToS)
+Users of this software are solely and exclusively responsible for complying with the Terms of Service, Acceptable Use Policies, Developer Agreements, and Rate Limits of each third-party provider they interface with through this tool.
+- The author does not guarantee that using this tool complies with the terms of any provider.
+- The author shall not be held liable if the use of this software results in the suspension, restriction, or termination of the user's account by a provider, or in any other legal action taken by a provider against the user.
+
+3. INDEMNIFICATION BY THE USER (Indemnisation)
+By using this software, the user agrees to indemnify, defend, and hold harmless the author from and against any and all claims, liabilities, damages, losses, costs, expenses, or fees (including reasonable legal/attorneys' fees) arising out of or relating to:
+- The user's violation of any third-party provider's Terms of Service or policies.
+- Any dispute, litigation, or claim brought against the author by a third-party provider due to the user's deployment, misuse, or configuration of this software.
+- The user's configuration, storage, or transmission of API keys and credentials.
+
+4. API EVOLUTION, DEPRECATION AND SERVICE INTERRUPTION
+The software interfaces with external, third-party APIs that are beyond the author's control.
+- Providers may modify, deprecate, rate-limit, monetize, or shut down their endpoints, models, or APIs at any time without notice.
+- The author is under no obligation to update, fix, or maintain the software to ensure continued compatibility with any provider's services.
+- The author shall not be liable for any service interruptions, data loss, or system failures caused by changes made by third-party providers.
+
+5. API KEYS & CREDENTIALS SECURITY
+This software operates entirely locally on the user's machine.
+- API keys, tokens, and credentials (e.g., NVIDIA_API_KEY, GROQ_API_KEY, GITHUB_TOKEN, etc.) are stored locally on the user's device.
+- The author does not collect, store, transmit, or have access to the user's API keys or configuration files.
+- The user is solely responsible for securing their credentials. The author shall not be held liable for any credential leaks, unauthorized access, or security breaches resulting from the user's environment.
+
+6. BILLING, COSTS, AND USAGE LIMITS
+Users are solely responsible for managing their accounts with third-party providers. The author shall not be liable for:
+- Any monetary charges, subscription fees, billing spikes, or financial damages incurred through the use of this software.
+- Rate limits, quota exhaustion, suspension, or termination of the user's accounts by third-party providers.
+
+7. AI GENERATED OUTPUTS & COMPLIANCE
+The software acts solely as an interface to connect to AI models. The author does not control, filter, or review the outputs generated by these models.
+- The user assumes all risks associated with the generated output (e.g., copyright infringement, license violations, software bugs, security vulnerabilities in generated code).
+- The author makes no warranties regarding the accuracy, safety, or legality of the code or content generated by the models.
+
+8. JURISDICTIONAL LIMITATION OF LIABILITY (French & EU Law / Droit Français et Européen)
+To the maximum extent permitted by applicable law, including but not limited to French Civil Code (Code civil) and EU consumer protection regulations:
+- Since this software is provided free of charge (à titre gratuit), the author's liability is excluded for all indirect, incidental, or consequential damages, including loss of profit, loss of data, loss of business, or system downtime.
+- The author’s liability shall only be engaged in the event of gross negligence (faute lourde) or intentional misconduct (dol), and is otherwise limited to the minimum extent allowed by law.
+- In any case, the author's total liability for any claim arising out of or in connection with this software shall not exceed €10 (ten Euros).

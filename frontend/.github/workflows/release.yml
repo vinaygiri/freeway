@@ -1,0 +1,337 @@
+# 📖 Release workflow — publishes to npm, creates a GitHub Release, and notifies Discord.
+#
+# Triggered on every push to main (or manually via workflow_dispatch). Compares the version
+# in package.json against existing git tags — if no tag exists for that version, it:
+#   1. Publishes to npm
+#   2. Creates a GitHub Release with changelog extracted from changelog/vX.Y.Z.md
+#   3. Posts a rich embed to Discord with the release notes
+#
+# 📖 Required secrets (Settings → Secrets and variables → Actions):
+#   - NPM_TOKEN          : npm access token (npmjs.com → Access Tokens → Automation type)
+#   - DISCORD_WEBHOOK_URL: Discord channel webhook URL (Channel settings → Integrations → Webhooks)
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_version:
+        description: 'Force publish this version (overrides package.json)'
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      # 📖 Health check: verify GitHub Actions and npm are operational before spending minutes.
+      # 📖 Fails early (in ~5s) instead of failing mid-workflow after minutes of wasted time.
+      # 📖 This catches GitHub Actions outages, npm registry issues, and authentication problems.
+      - name: Pre-flight health check
+        id: health
+        run: |
+          echo "🔍 Running pre-flight health checks..."
+          FAIL=0
+
+          # ── Check 1: GitHub Actions status ──
+          # 📖 The status endpoint can occasionally return an empty/truncated body.
+          # 📖 Treat that as "unknown" instead of crashing the workflow before checkout.
+          ACTIONS_STATUS=$(curl -sS --retry 2 --retry-delay 2 https://www.githubstatus.com/api/v2/summary.json \
+            | node -e "let s=''; process.stdin.on('data', c => s += c); process.stdin.on('end', () => { try { const d=JSON.parse(s); const c=(d.components||[]).find(x=>String(x.name||'').includes('Actions')); console.log(c ? c.status : 'unknown') } catch { console.log('unknown') } })" || echo "unknown")
+          echo "  GitHub Actions: $ACTIONS_STATUS"
+          if [ "$ACTIONS_STATUS" = "major_outage" ] || [ "$ACTIONS_STATUS" = "degraded_performance" ]; then
+            echo "⚠️  GitHub Actions is $ACTIONS_STATUS — aborting to avoid wasted runs"
+            echo "   Check https://www.githubstatus.com for updates"
+            FAIL=1
+          fi
+
+          # ── Check 2: npm registry reachable ──
+          NPM_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/ || echo "000")
+          echo "  npm registry: HTTP $NPM_STATUS"
+          if [ "$NPM_STATUS" != "200" ]; then
+            echo "⚠️  npm registry is unreachable or returned HTTP $NPM_STATUS — cannot publish"
+            FAIL=1
+          fi
+
+          # ── Check 3: GitHub API reachable ──
+          # We check the status code without -f so curl does not fail on API rate limits (HTTP 403)
+          GH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://api.github.com/ || echo "000")
+          echo "  GitHub API: HTTP $GH_STATUS"
+          if [ "$GH_STATUS" = "000" ]; then
+            echo "⚠️  GitHub API is completely unreachable — cannot create release"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" = "1" ]; then
+            echo ""
+            echo "❌ Pre-flight checks failed — aborting workflow to save minutes"
+            echo "   Re-run when services are healthy: gh workflow run Release"
+            exit 1
+          fi
+          echo "✅ All pre-flight checks passed"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if release needed
+        id: check
+        run: |
+          if [ -n "${{ inputs.force_version }}" ]; then
+            VERSION="${{ inputs.force_version }}"
+            echo "🎯 Force version override: $VERSION"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ Tag v$VERSION already exists — skipping release"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "🚀 New version $VERSION detected — will publish"
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.check.outputs.skip == 'false'
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip == 'false'
+        with:
+          node-version: '20'
+          registry-url: https://registry.npmjs.org
+          cache: 'pnpm'
+
+      - run: pnpm install --no-frozen-lockfile
+        if: steps.check.outputs.skip == 'false'
+
+      # 📖 Install ImageMagick (`magick` binary) — required by scripts/build-favicons.mjs,
+      # 📖 which rasterizes /icon.png into the favicon asset set during `npm run build:web`.
+      # 📖 Not pre-installed on ubuntu-latest runners as of 2026.
+      - name: Install ImageMagick
+        if: steps.check.outputs.skip == 'false'
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
+      # 📖 Publish to npm registry with retry logic (3 attempts with exponential backoff).
+      # 📖 npm publish can fail with 403/503 errors during registry instability.
+      # 📖 Sigstore provenance links the npm package to its exact source commit,
+      # 📖 builder, and workflow for supply-chain verification.
+      - name: Publish to npm
+        if: steps.check.outputs.skip == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          MAX_ATTEMPTS=3
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            echo "📦 npm publish attempt $i/$MAX_ATTEMPTS"
+            if npm publish --access public --provenance; then
+              echo "✅ Published successfully"
+              break
+            fi
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "❌ npm publish failed after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            DELAY=$((10 * i))
+            echo "⏳ Retrying in ${DELAY}s..."
+            sleep $DELAY
+          done
+
+      # 📖 Generate an SBOM (Software Bill of Materials) and attach to the GitHub Release
+      - name: Generate SBOM
+        if: steps.check.outputs.skip == 'false'
+        run: npm sbom --sbom-type application > sbom.json 2>/dev/null || true
+
+      # 📖 Extract the changelog from changelog/vX.Y.Z.md (per-version file)
+      - name: Extract changelog
+        if: steps.check.outputs.skip == 'false'
+        id: changelog
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          node - <<'EOF'
+          const fs   = require('fs')
+          const ver  = process.env.VERSION
+
+          let notes = ''
+          const changelogFile = `changelog/v${ver}.md`
+          if (fs.existsSync(changelogFile)) {
+            const text    = fs.readFileSync(changelogFile, 'utf8')
+            const lines   = text.split('\n')
+            const buf     = []
+
+            for (const line of lines) {
+              // 📖 Skip the header line: "# Changelog vX.Y.Z - YYYY-MM-DD"
+              if (line.startsWith('# Changelog')) continue
+              buf.push(line)
+            }
+
+            // 📖 Trim leading/trailing blank lines
+            notes = buf.join('\n').trim()
+          }
+
+          if (notes) {
+            console.log('📝 Changelog section found, length:', notes.length)
+            fs.writeFileSync('release_notes.md', notes)
+            // 📖 Also expose a short version for the Discord embed (max 3800 chars)
+            const short = notes.length > 3800 ? notes.slice(0, 3800) + '\n\n…_(see full release for more)_' : notes
+            fs.writeFileSync('release_notes_short.md', short)
+            process.stdout.write('has_notes=true\n')
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'has_notes=true\n')
+          } else {
+            console.log('⚠️ No changelog section found for version', ver)
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'has_notes=false\n')
+          }
+          EOF
+
+      # 📖 Create the GitHub Release with the extracted notes (or auto-generated if none found)
+      # 📖 Includes retry logic for git push tag and gh release create
+      - name: Create GitHub Release
+        if: steps.check.outputs.skip == 'false'
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.check.outputs.version }}
+          HAS_NOTES: ${{ steps.changelog.outputs.has_notes }}
+        run: |
+          # 📖 Push tag with retry (HTTP 403 can happen during GitHub outages)
+          MAX_ATTEMPTS=3
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            if git tag "v$VERSION" && git push origin "v$VERSION"; then
+              echo "✅ Tag pushed"
+              break
+            fi
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "❌ Failed to push tag after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            DELAY=$((10 * i))
+            echo "⏳ Retrying tag push in ${DELAY}s..."
+            sleep $DELAY
+            # 📖 Tag might already exist locally from a failed attempt
+            git tag -d "v$VERSION" 2>/dev/null || true
+          done
+
+          # 📖 Create release with retry
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            if [ "$HAS_NOTES" = "true" ]; then
+              echo "📝 Creating release with changelog notes (attempt $i)"
+              if gh release create "v$VERSION" \
+                --title "v$VERSION" \
+                --notes-file release_notes.md \
+                sbom.json 2>/dev/null || \
+                 gh release create "v$VERSION" \
+                --title "v$VERSION" \
+                --notes-file release_notes.md; then
+                break
+              fi
+            else
+              echo "⚠️ No notes found — using auto-generated release notes (attempt $i)"
+              if gh release create "v$VERSION" \
+                --title "v$VERSION" \
+                --generate-notes \
+                sbom.json 2>/dev/null || \
+                 gh release create "v$VERSION" \
+                --title "v$VERSION" \
+                --generate-notes; then
+                break
+              fi
+            fi
+
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "❌ Failed to create release after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            DELAY=$((10 * i))
+            echo "⏳ Retrying release creation in ${DELAY}s..."
+            sleep $DELAY
+          done
+
+          # 📖 Get the release URL for the Discord embed
+          RELEASE_URL=$(gh release view "v$VERSION" --json url -q .url)
+          echo "release_url=$RELEASE_URL" >> "$GITHUB_OUTPUT"
+
+      # 📖 Post a rich embed to Discord with version, changelog excerpt, and a link to the release.
+      # 📖 The embed color 0x76b900 is NVIDIA green (matches the project branding).
+      # 📖 If DISCORD_WEBHOOK_URL is not set, this step is silently skipped.
+      - name: Notify Discord
+        if: steps.check.outputs.skip == 'false'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ steps.check.outputs.version }}
+          RELEASE_URL: ${{ steps.release.outputs.release_url }}
+          HAS_NOTES: ${{ steps.changelog.outputs.has_notes }}
+        run: |
+          node - <<'EOF'
+          const https   = require('https')
+          const fs      = require('fs')
+          const url     = process.env.DISCORD_WEBHOOK_URL
+          const version = process.env.VERSION
+
+          // 📖 Bail early if no webhook URL is configured — skip silently
+          if (!url) {
+            console.log('⚠️ DISCORD_WEBHOOK_URL not set — skipping Discord notification')
+            process.exit(0)
+          }
+          const releaseUrl = process.env.RELEASE_URL ||
+            `https://github.com/vava-nessa/free-coding-models/releases/tag/v${version}`
+
+          // 📖 Read the short changelog text (already truncated to 3800 chars)
+          let changelogText = ''
+          if (fs.existsSync('release_notes_short.md')) {
+            changelogText = fs.readFileSync('release_notes_short.md', 'utf8').trim()
+          }
+
+          // 📖 Build the Discord embed payload
+          const embed = {
+            title: `⚡ free-coding-models v${version} released!`,
+            url: releaseUrl,
+            color: 0x76b900,   // 📖 NVIDIA green
+            description: changelogText || '_No changelog details available._',
+            fields: [
+              {
+                name: '📦 Install / Update',
+                value: `\`\`\`bash\nnpm i -g free-coding-models@${version}\n\`\`\``,
+                inline: false,
+              },
+            ],
+            footer: {
+              text: 'free-coding-models • npm publish',
+            },
+            timestamp: new Date().toISOString(),
+          }
+
+          const body = JSON.stringify({ embeds: [embed] })
+
+          const urlObj = new URL(url)
+          const req = https.request(
+            {
+              hostname: urlObj.hostname,
+              path: urlObj.pathname + urlObj.search,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+              },
+            },
+            (res) => {
+              console.log('Discord response status:', res.statusCode)
+              res.resume() // 📖 Drain the response body so the socket closes cleanly
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                console.log('✅ Discord notification sent')
+                process.exit(0)
+              } else {
+                console.error('❌ Discord notification failed:', res.statusCode)
+                process.exit(1)
+              }
+            }
+          )
+          req.on('error', (e) => { console.error('❌ Request error:', e); process.exit(1) })
+          req.write(body)
+          req.end()
+          EOF

@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+/**
+ * @file test/fixtures/mock-bin/crush
+ * @description Tiny interactive fake `crush` binary used to validate the `/testfcm` runner.
+ *
+ * 📖 The goal is not to emulate the real product. It only proves that:
+ * 📖 - FCM can launch a tool named `crush`
+ * 📖 - the tool sees the config written into the isolated HOME
+ * 📖 - the runner can send `hi` and capture a human-like response
+ */
+
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import readline from 'node:readline'
+
+const configPath = join(homedir(), '.config', 'crush', 'crush.json')
+let selectedModel = 'unknown'
+
+if (existsSync(configPath)) {
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8'))
+    selectedModel = parsed?.models?.large?.model || selectedModel
+  } catch { /* ignore broken test fixture config */ }
+}
+
+console.log(`Mock Crush ready on model: ${selectedModel}`)
+process.stdout.write('> ')
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: true,
+})
+
+rl.on('line', (line) => {
+  const input = line.trim().toLowerCase()
+  if (input === 'hi' || input === 'hello') {
+    console.log('hello, how can i help you?')
+  } else if (input === 'exit' || input === '/quit') {
+    console.log('bye')
+    process.exit(0)
+  } else {
+    console.log(`echo: ${line}`)
+  }
+  process.stdout.write('> ')
+})

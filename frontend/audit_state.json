@@ -1,0 +1,81 @@
+{
+  "_meta": {
+    "totalModels": 157,
+    "lastFullAudit": "2026-06-10"
+  },
+  "nvidia": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "cde1331268a4d3686f34297a4487e92b",
+    "modelCount": 27
+  },
+  "groq": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "dc41cb7450c0b5a97ae5b4c0366656a3",
+    "modelCount": 8
+  },
+  "cerebras": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "36017621a884dd553c73c34757309eaf",
+    "modelCount": 2
+  },
+  "googleai": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "7c1853c3e20ec800af5798ac0abbc4ca",
+    "modelCount": 7
+  },
+  "github-models": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "073d0cc1aeebaa2cd9d9e58f74e613ae",
+    "modelCount": 15
+  },
+  "mistral": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "f4776050698087893e6c513f9bcd5932",
+    "modelCount": 5
+  },
+  "cloudflare": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "f411667b29f00dda92b58537dde8081f",
+    "modelCount": 16
+  },
+  "openrouter": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "b02cd17e8b92846ffb716ec86e70dcdf",
+    "modelCount": 24
+  },
+  "sambanova": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "d769460cb4ba340408d26271125bb94e",
+    "modelCount": 7
+  },
+  "ovhcloud": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "20ab6894a702778f44f0b772a30103a1",
+    "modelCount": 10
+  },
+  "codestral": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "5e8ca2462d78998441463382957eb963",
+    "modelCount": 1
+  },
+  "zai": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "bac9274515e6a27920cbad47cf94edb3",
+    "modelCount": 2
+  },
+  "scaleway": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "6c1306c1804eebb73bad4e026ec1065c",
+    "modelCount": 10
+  },
+  "qwen": {
+    "lastAudited": "2026-06-10",
+    "fingerprint": "84abb56ab959de853ff0a53fde0668ea",
+    "modelCount": 11
+  },
+  "opencode-zen": {
+    "lastAudited": "2026-06-01",
+    "fingerprint": "12f6f6de4460c6708189e0f45bc0cc3f",
+    "modelCount": 5
+  }
+}

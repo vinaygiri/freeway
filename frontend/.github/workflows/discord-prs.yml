@@ -1,0 +1,208 @@
+name: Post all PR activity to Discord
+
+on:
+  pull_request_target:
+  pull_request_review:
+  pull_request_review_comment:
+  issue_comment:
+
+jobs:
+  notify-discord:
+    # issue_comment existe aussi pour les issues normales,
+    # donc on garde seulement les commentaires sur pull requests
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send PR activity to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PR }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          REPO_NAME: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -e
+
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Missing DISCORD_PR secret"
+            exit 1
+          fi
+
+          # pull_request_target
+          if [ "$EVENT_NAME" = "pull_request_target" ]; then
+            TITLE=$(jq -r '.pull_request.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.pull_request.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.pull_request.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.pull_request.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            BASE=$(jq -r '.pull_request.base.ref // "unknown"' "$GITHUB_EVENT_PATH")
+            HEAD=$(jq -r '.pull_request.head.ref // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.pull_request.body // "No description"' "$GITHUB_EVENT_PATH" | head -c 800)
+            MERGED=$(jq -r '.pull_request.merged // false' "$GITHUB_EVENT_PATH")
+            REQUESTED_REVIEWER=$(jq -r '.requested_reviewer.login // empty' "$GITHUB_EVENT_PATH")
+            REQUESTED_TEAM=$(jq -r '.requested_team.name // empty' "$GITHUB_EVENT_PATH")
+
+            EMOJI="🔀"
+            LABEL="$ACTION"
+
+            case "$ACTION" in
+              opened) EMOJI="🆕"; LABEL="opened PR" ;;
+              reopened) EMOJI="♻️"; LABEL="reopened PR" ;;
+              edited) EMOJI="✏️"; LABEL="edited PR" ;;
+              synchronize) EMOJI="📦"; LABEL="pushed commits to PR" ;;
+              ready_for_review) EMOJI="🚀"; LABEL="marked PR ready for review" ;;
+              converted_to_draft) EMOJI="📝"; LABEL="converted PR to draft" ;;
+              review_requested)
+                EMOJI="🔔"
+                TARGET="${REQUESTED_REVIEWER:-$REQUESTED_TEAM}"
+                [ -z "$TARGET" ] && TARGET="someone"
+                LABEL="requested review from $TARGET"
+                ;;
+              review_request_removed)
+                EMOJI="➖"
+                TARGET="${REQUESTED_REVIEWER:-$REQUESTED_TEAM}"
+                [ -z "$TARGET" ] && TARGET="someone"
+                LABEL="removed review request for $TARGET"
+                ;;
+              closed)
+                if [ "$MERGED" = "true" ]; then
+                  EMOJI="✅"
+                  LABEL="merged PR"
+                else
+                  EMOJI="❌"
+                  LABEL="closed PR"
+                fi
+                ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub PR Activity" \
+              --arg title "$EMOJI PR #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nAuthor: **$AUTHOR**\nBranch: **$HEAD → $BASE**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          # pull_request_review
+          if [ "$EVENT_NAME" = "pull_request_review" ]; then
+            TITLE=$(jq -r '.pull_request.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.pull_request.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.pull_request.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.review.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            STATE=$(jq -r '.review.state // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.review.body // "No review text"' "$GITHUB_EVENT_PATH" | head -c 800)
+
+            EMOJI="🧪"
+            LABEL="$ACTION review"
+
+            case "$ACTION" in
+              submitted)
+                case "$STATE" in
+                  approved) EMOJI="✅"; LABEL="approved PR" ;;
+                  changes_requested) EMOJI="🛑"; LABEL="requested changes" ;;
+                  commented) EMOJI="💬"; LABEL="reviewed PR" ;;
+                  *) EMOJI="🧪"; LABEL="submitted review ($STATE)" ;;
+                esac
+                ;;
+              edited) EMOJI="✏️"; LABEL="edited review" ;;
+              dismissed) EMOJI="🚫"; LABEL="dismissed review" ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub PR Activity" \
+              --arg title "$EMOJI PR #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nReviewer: **$AUTHOR**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          # pull_request_review_comment
+          if [ "$EVENT_NAME" = "pull_request_review_comment" ]; then
+            TITLE=$(jq -r '.pull_request.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.comment.html_url // .pull_request.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.pull_request.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.comment.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.comment.body // "No comment text"' "$GITHUB_EVENT_PATH" | head -c 800)
+
+            EMOJI="💬"
+            LABEL="$ACTION review comment"
+
+            case "$ACTION" in
+              created) EMOJI="💬"; LABEL="new inline review comment" ;;
+              edited) EMOJI="✏️"; LABEL="edited inline review comment" ;;
+              deleted) EMOJI="🗑️"; LABEL="deleted inline review comment" ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub PR Activity" \
+              --arg title "$EMOJI PR #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nAuthor: **$AUTHOR**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          # issue_comment on PR only
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            TITLE=$(jq -r '.issue.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.comment.html_url // .issue.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.issue.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.comment.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.comment.body // "No comment text"' "$GITHUB_EVENT_PATH" | head -c 800)
+
+            EMOJI="💬"
+            LABEL="$ACTION PR comment"
+
+            case "$ACTION" in
+              created) EMOJI="💬"; LABEL="new PR comment" ;;
+              edited) EMOJI="✏️"; LABEL="edited PR comment" ;;
+              deleted) EMOJI="🗑️"; LABEL="deleted PR comment" ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub PR Activity" \
+              --arg title "$EMOJI PR #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nAuthor: **$AUTHOR**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          curl -sS -H "Content-Type: application/json" \
+               -X POST \
+               -d @payload.json \
+               "$DISCORD_WEBHOOK_URL"

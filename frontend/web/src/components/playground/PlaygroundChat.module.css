@@ -1,0 +1,382 @@
+/**
+ * @file web/src/components/playground/PlaygroundChat.module.css
+ * @description Styles for the shared PlaygroundChat core. Two density variants
+ *   (`full` for the modal playground, `mini` for the router + model-row
+ *   playgrounds) share the same visual language so every playground looks
+ *   identical — same bubbles, same metadata chips, same input bar.
+ *
+ * 📖 Design tokens come from the app's CSS variables (set by the theme), with
+ * 📖 sensible hard-coded fallbacks so the component degrades gracefully.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+}
+
+/* ── Transcript ─────────────────────────────────────────────────────────── */
+.transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.root.full .transcript {
+  padding: 16px;
+}
+
+.root.mini .transcript {
+  padding: 8px;
+  gap: 8px;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  color: var(--text-muted, #888);
+  padding: 24px 16px;
+}
+
+.root.mini .empty {
+  padding: 18px 12px;
+  justify-content: flex-start;
+}
+
+.emptyIcon {
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+
+.emptyTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text, #eee);
+}
+
+.root.mini .emptyTitle {
+  font-size: 13px;
+}
+
+.emptyHint {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 420px;
+  opacity: 0.8;
+}
+
+.root.mini .emptyHint {
+  font-size: 11px;
+  max-width: 100%;
+}
+
+.emptyHint code {
+  background: var(--bg-secondary, #16161e);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'Menlo', 'Monaco', monospace;
+  font-size: 11px;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* ── Message bubble ─────────────────────────────────────────────────────── */
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 88%;
+  animation: msgIn 0.15s ease;
+}
+
+.root.mini .message {
+  max-width: 92%;
+  gap: 3px;
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.bubbleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #888);
+  font-weight: 600;
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.message.assistant:hover .copyBtn,
+.copyBtn:focus-visible {
+  opacity: 0.8;
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.root.mini .bubble {
+  padding: 8px 11px;
+  font-size: 12.5px;
+  border-radius: 10px;
+}
+
+.message.user .bubble {
+  background: var(--accent, #22c55e);
+  color: #061a08;
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant .bubble {
+  background: var(--bg-secondary, #16161e);
+  border: 1px solid var(--border, #1e1e2e);
+  color: var(--text, #eee);
+  border-bottom-left-radius: 4px;
+}
+
+.typing {
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+
+.codeBlock {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+  white-space: pre;
+}
+
+/* ── Streaming cursor ───────────────────────────────────────────────────── */
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--accent, #22c55e);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.9s infinite;
+}
+
+@keyframes blink {
+  0%, 50%   { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* ── Metadata chips (the harmonized stats row) ──────────────────────────── */
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  padding: 0 4px;
+}
+
+.root.mini .meta {
+  gap: 5px;
+  font-size: 10.5px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-secondary, #16161e);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'Menlo', 'Monaco', monospace;
+  line-height: 1.4;
+}
+
+/* addressed model under the user bubble */
+.target {
+  color: var(--text-muted, #aaa);
+  opacity: 0.85;
+}
+
+/* served model chip — accent-tinted so it stands out */
+.modelChip {
+  color: var(--accent, #22c55e);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.latencyChip {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.tpsChip {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.errorChip {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* ── Input bar ──────────────────────────────────────────────────────────── */
+.inputBar {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+  background: var(--bg-secondary, #16161e);
+}
+
+.root.full .inputBar {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border, #1e1e2e);
+}
+
+.root.mini .inputBar {
+  padding: 8px 0 0;
+  gap: 6px;
+}
+
+.input {
+  flex: 1;
+  resize: none;
+  min-height: 40px;
+  max-height: 180px;
+  background: var(--bg-primary, #0f0f17);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 8px;
+  color: var(--text, #eee);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.4;
+  transition: border-color 0.12s;
+}
+
+.root.mini .input {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  border-radius: 7px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent, #22c55e);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sendBtn,
+.stopBtn {
+  background: var(--accent, #22c55e);
+  color: #061a08;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  font-family: inherit;
+  transition: filter 0.12s, opacity 0.12s;
+  flex-shrink: 0;
+}
+
+.stopBtn {
+  background: #ef4444;
+  color: #fff;
+}
+
+.root.mini .sendBtn,
+.root.mini .stopBtn {
+  height: 34px;
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.sendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sendBtn:hover:not(:disabled),
+.stopBtn:hover {
+  filter: brightness(1.1);
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

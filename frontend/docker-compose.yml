@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  fcm:
+    image: ${FCM_IMAGE:-ghcr.io/vava-nessa/free-coding-models:latest}
+    container_name: fcm
+    restart: unless-stopped
+    ports:
+      - "19280:19280"
+    environment:
+      FREE_CODING_MODELS_TELEMETRY: "0"
+      FCM_HOST: "0.0.0.0"
+      # 📖 Optional: comma-separated origins allowed to access the web UI
+      # 📖 from outside the container (e.g. "http://your-host:19280")
+      FCM_ALLOWED_ORIGINS: ${FCM_ALLOWED_ORIGINS:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      SAMBANOVA_API_KEY: ${SAMBANOVA_API_KEY:-}
+      OVH_AI_ENDPOINTS_ACCESS_TOKEN: ${OVH_AI_ENDPOINTS_ACCESS_TOKEN:-}
+      CODESTRAL_API_KEY: ${CODESTRAL_API_KEY:-}
+      ZAI_API_KEY: ${ZAI_API_KEY:-}
+      SCALEWAY_API_KEY: ${SCALEWAY_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY:-}
+    volumes:
+      - fcm-data:/home/fcm
+
+volumes:
+  fcm-data:

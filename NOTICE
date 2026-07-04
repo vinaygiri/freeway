@@ -1,0 +1,24 @@
+Freeway
+Copyright (c) 2026 Vinay Patil
+
+This product includes and builds upon software developed by third parties.
+Each component below is used under the MIT License; full texts are in LICENSES/.
+
+--------------------------------------------------------------------------------
+free-claude-code
+  Author:    Ali Khokhar (Alishahryar1)
+  Copyright: (c) 2026 Ali Khokhar
+  Source:    https://github.com/Alishahryar1/free-claude-code
+  License:   MIT — LICENSES/free-claude-code-LICENSE.txt
+--------------------------------------------------------------------------------
+free-coding-models
+  Author:    vava-nessa (Vanessa Depraute)
+  Copyright: (c) 2025-2026 vava-nessa
+  Source:    https://github.com/vava-nessa/free-coding-models
+  License:   MIT with Enhanced Disclaimers — LICENSES/free-coding-models-LICENSE.txt
+--------------------------------------------------------------------------------
+
+This is an independent, community-developed project. It is not affiliated with,
+endorsed by, or sponsored by the upstream authors or by any AI model provider
+referenced in the software. All product names, logos, and trademarks are the
+property of their respective owners and are used for descriptive purposes only.

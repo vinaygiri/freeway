@@ -1,0 +1,50 @@
+# 📖 Security audit workflow — runs npm audit + lockfile lint on every push/PR
+# Also runs a weekly scheduled scan to catch newly disclosed vulnerabilities
+
+name: Security Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      # 📖 Check for known vulnerabilities in dependencies
+      - name: pnpm audit
+        run: pnpm audit --audit-level=moderate || true
+
+  lockfile-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 📖 Verify the lockfile is present and committed
+      - name: Verify lockfile exists
+        run: test -f pnpm-lock.yaml && echo "✅ pnpm-lock.yaml present"
+
+      - name: Verify lockfile is tracked by git
+        run: git ls-files --error-unmatch pnpm-lock.yaml

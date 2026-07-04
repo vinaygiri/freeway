@@ -1,0 +1,59 @@
+Here are 3 feature ideas for the `free-coding-models` CLI based on your request:
+
+### 1. Local Auto-Failover Proxy Server (`free-coding-models serve`)
+
+**Description:**
+Instead of just pinging models and updating a static config file for tools like OpenCode or OpenClaw, this feature would add a new `serve` command. It spins up a local OpenAI-compatible proxy server (e.g., at `localhost:8080`). You configure your AI tools to point to this local proxy *once*. Under the hood, the proxy continuously monitors the health and rate limits of all your configured free providers. When your AI tool makes a completion request, the proxy automatically routes it to the currently fastest, most stable, and non-rate-limited model in your preferred tier (e.g., always route to the fastest S-tier model). If a provider goes down mid-generation or hits a 429 Too Many Requests error, the proxy transparently retries the request with the next best available model.
+
+**Why it's cool:**
+Free LLM providers are notoriously flaky—they go down, change rate limits, or experience sudden latency spikes. Right now, a user has to manually run the CLI, see who is fast, update their tool's config, and hope it stays stable. A local failover proxy completely abstracts this away. It gives users the reliability of a paid, premium enterprise endpoint using entirely free, ephemeral APIs. It transforms `free-coding-models` from a manual diagnostic tool into a true, resilient infrastructure layer for coding assistants.
+
+**Pros:**
+* **Zero-Downtime Coding:** Users never have to manually switch models when Groq or NVIDIA suddenly rate-limits them; the proxy handles it invisibly.
+* **Set-and-Forget:** Configure Cursor/OpenCode/OpenClaw *once* to `localhost:8080`, and the tool dynamically ensures the best experience always.
+* **Maximized Free Tiers:** By load-balancing across multiple free providers, users can effectively multiply their daily free token limits without thinking about it.
+
+**Cons:**
+* **Complexity:** Requires implementing an HTTP proxy server and standardizing the request/response payloads across different providers (though most are OpenAI-compatible now, edge cases exist).
+* **Context Consistency:** Switching models mid-session might slightly change the "voice" or formatting style of the AI's code output, which might confuse the user or the AI tool's internal context window tracking.
+* **Resource Usage:** Running a persistent local background server consumes a small amount of system resources compared to a run-once CLI tool.
+
+---
+
+### 2. Real-World Code Task Benchmarking (`--eval` mode)
+
+**Description:**
+Currently, the tool measures latency via simple HTTP pings (likely small, generic completion requests like "Say hello"). This feature would introduce an `--eval` flag that runs a mini "SWE-bench-lite" style evaluation. Instead of a simple ping, the CLI sends a small, predefined coding problem (e.g., "Write a Python function to parse this specific JSON structure and handle these edge cases") to the top N models. It measures not just the Time-to-First-Token (TTFT) and generation speed, but also runs a quick local test against the generated code to see if it actually works. It then ranks the models based on a combined score of Speed + Correctness.
+
+**Why it's cool:**
+Latency is only half the battle. A model that returns garbage in 200ms is worse than a model that returns working code in 800ms. Because free providers often use quantized or smaller parameter versions of flagship models to save compute, their actual coding quality can vary wildly from their official "SWE-bench" scores. This feature gives users real-time ground truth on which models are *currently* smart enough to solve problems, not just which ones have the fastest network connection.
+
+**Pros:**
+* **True Quality Metric:** Provides actionable data on model intelligence, making the "Tier" rankings dynamic rather than static hardcoded values.
+* **Detects Silent Degradation:** Sometimes providers stealth-update their free models to cheaper, dumber versions. This feature catches that instantly.
+* **Highly Differentiated:** No other CLI tool currently does live, automated code-correctness benchmarking of free endpoints.
+
+**Cons:**
+* **Token Cost/Rate Limits:** Sending real coding prompts and receiving long completions consumes significantly more tokens, which might trigger rate limits on free tiers much faster than simple pings.
+* **Execution Time:** A full evaluation run will take much longer (seconds or minutes) compared to the near-instant feedback of current network pings.
+* **Maintenance:** Requires curating and maintaining a set of robust, deterministic test prompts and evaluation scripts.
+
+---
+
+### 3. Historical Stability & Quota Tracking (`--history`)
+
+**Description:**
+The tool currently provides a real-time snapshot of the last 60 seconds of ping data. This feature would add a local SQLite or JSON append-only log that silently records ping results, rate limit hits (429s), and quota headers every time the user runs the tool or keeps it open. The user can then run `free-coding-models --history` to view a rich TUI graph (using something like `blessed` or simple ANSI sparklines) showing the performance of models over the last 24 hours, 7 days, or 30 days. It would also track token usage over time, warning the user when they are approaching the daily limits for specific free providers.
+
+**Why it's cool:**
+It turns anecdotal frustration ("Man, Groq is always down on Tuesday afternoons") into hard data. Users can see at a glance which providers offer true long-term reliability versus those that just had a lucky 60-second window. The quota tracking aspect is incredibly valuable for power users juggling 5+ free API keys, acting as a unified dashboard for all their free LLM "allowances".
+
+**Pros:**
+* **Informed Decision Making:** Helps users pick models based on 99th percentile stability over a week, rather than just the last 10 seconds.
+* **Quota Management:** Solves the massive pain point of unexpectedly running out of free credits mid-task by providing a unified usage dashboard.
+* **Data Export:** Can easily add a `--csv` or `--json` export for users who want to analyze provider reliability in external tools.
+
+**Cons:**
+* **Disk I/O and Storage:** Requires managing local state, which introduces complexities around log rotation, file permissions, and disk space (though minor for text logs).
+* **Incomplete Data:** Because the tool only tracks data when it is running, the history will be spotty unless the user runs it frequently or keeps it open in a background tmux pane.
+* **API Inconsistencies:** Not all providers cleanly expose their remaining quota in HTTP headers, making the usage tracking partially reliant on estimation for some endpoints.

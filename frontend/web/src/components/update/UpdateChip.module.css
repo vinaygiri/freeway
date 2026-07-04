@@ -1,0 +1,146 @@
+/**
+ * @file web/src/components/update/UpdateChip.module.css
+ * @description Styles for the header update chip + popover.
+ */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: var(--color-success-dim);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all 150ms;
+  white-space: nowrap;
+}
+.chip:hover {
+  background: var(--color-success);
+  color: var(--color-bg);
+}
+
+.checking {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  opacity: 0.5;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.popoverTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-success);
+}
+.popoverClose {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+.popoverClose:hover { color: var(--color-text); background: var(--color-bg-hover); }
+
+.popoverBody {
+  padding: 10px 12px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+.popoverBody strong {
+  color: var(--color-success);
+  font-family: var(--font-mono);
+}
+
+.popoverActions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 12px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  justify-content: center;
+  font-family: var(--font-sans);
+  transition: all 150ms;
+}
+.primaryAction {
+  background: var(--color-success);
+  color: var(--color-bg);
+  border: 1px solid var(--color-success);
+}
+.primaryAction:hover {
+  background: var(--color-success);
+  filter: brightness(0.9);
+}
+.secondaryAction {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+.secondaryAction:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-text-muted);
+}

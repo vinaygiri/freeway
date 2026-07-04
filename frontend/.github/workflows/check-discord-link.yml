@@ -1,0 +1,51 @@
+name: Check Discord invite link
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check-link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Discord invite validity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+
+          INVITE_CODE="f2AjwV2AN"
+          DISCORD_URL="https://discord.gg/${INVITE_CODE}"
+          API_URL="https://discord.com/api/v10/invites/${INVITE_CODE}"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$API_URL")
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Discord invite link is invalid (HTTP $HTTP_STATUS): $DISCORD_URL"
+
+            EXISTING=$(gh issue list --repo "$REPO" --label "discord-link" --state open --json number --jq '.[0].number // empty')
+
+            if [ -n "$EXISTING" ]; then
+              echo "Issue #$EXISTING already open — skipping"
+            else
+              gh issue create --repo "$REPO" \
+                --title "Discord invite link is invalid" \
+                --body "The Discord invite link \`$DISCORD_URL\` returned HTTP **$HTTP_STATUS** and appears to be invalid or expired.
+
+          Please update the invite URL in:
+          - \`README.md\`
+          - \`src/render-table.js\` (TUI footer)
+
+          _This issue was created automatically by the \`check-discord-link\` workflow._" \
+                --label "discord-link"
+            fi
+
+            exit 1
+          fi
+
+          echo "✅ Discord invite link is valid (HTTP $HTTP_STATUS): $DISCORD_URL"

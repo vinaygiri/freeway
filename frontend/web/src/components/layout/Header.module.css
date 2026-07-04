@@ -1,0 +1,357 @@
+/**
+ * @file web/src/components/layout/Header.module.css
+ * @description Layout refactor (M1): the left sidebar is gone, so the header
+ * is now the only navigation rail. It hosts the brand mark, primary nav
+ * buttons, search, and right-side actions (⌘K, AI Latency, theme, export).
+ *
+ * 📖 The model table underneath is 100% of the viewport width — the header
+ * uses the same width, and nav items can collapse into a kebab at narrow widths.
+ */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-h, 60px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  gap: 16px;
+  background: var(--color-bg-card);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border-bottom: 1px solid var(--color-border);
+  width: 100%;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.center {
+  flex: 1;
+  max-width: 480px;
+  min-width: 0;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ─── Brand ─── */
+.logo { display: flex; align-items: center; gap: 8px; }
+.logoIconSvg {
+  color: var(--color-brand);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.logoText {
+  font-size: 16px; font-weight: 750;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  letter-spacing: -0.2px;
+}
+.logoTextHighlight { color: var(--color-brand); }
+.version {
+  font-size: 12px; font-weight: 500; font-family: var(--font-mono);
+  color: var(--color-text-muted); background: var(--color-surface);
+  padding: 2px 6px; border-radius: 999px; border: 1px solid var(--color-border);
+}
+
+/* ─── Primary nav (replaces the sidebar) ─── */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border);
+  height: 36px;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono); /* Monospace font looks extremely high-tech */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms var(--ease-out);
+  white-space: nowrap;
+}
+.navBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+}
+.navBtnActive {
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border-color: var(--color-accent);
+  font-weight: 800;
+  box-shadow: 0 0 12px var(--color-accent-glow);
+}
+.navBtnActive:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-bg);
+  border-color: var(--color-accent-hover);
+}
+
+/* 📖 "Coming in M2" badge — small inline label that shows the menu structure
+   📖 is honest even before those milestones land. */
+.comingBadge {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-text-dim);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 2px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ─── Overflow menu (kebab) ─── */
+.menuWrap { position: relative; }
+.menuTrigger {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+.menuPopover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms;
+}
+.menuItem:hover { background: var(--color-bg-hover); }
+.menuItemActive {
+  background: var(--color-accent-dim) !important;
+  color: var(--color-accent) !important;
+  font-weight: 700;
+}
+.menuItem > span:first-of-type { flex: 1; }
+
+/* ─── Search ─── */
+.searchBar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: 8px; padding: 0 12px; height: 34px;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.searchBar:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+}
+.searchIcon { font-size: 16px; flex-shrink: 0; }
+.searchInput {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--color-text); font-size: 15px; font-family: var(--font-sans);
+  min-width: 0;
+}
+.searchInput::placeholder { color: var(--color-text-dim); }
+
+/* ─── Right-side buttons ─── */
+.iconBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 6px;
+  background: var(--color-surface); color: var(--color-text);
+  cursor: pointer; font-size: 18px; transition: all 150ms;
+}
+.iconBtn:hover { background: var(--color-bg-hover); border-color: var(--color-border-hover); }
+
+/* 📖 ⌘K button — the only global keyboard shortcut in the Web UI.
+   📖 Tinted accent so users can spot it instantly. */
+.cmdkBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 10px; height: 30px;
+  border: 1px solid var(--color-border); border-radius: 6px;
+  background: var(--color-surface); color: var(--color-text);
+  cursor: pointer; font-size: 14px; font-weight: 600;
+  font-family: var(--font-mono);
+  transition: all 150ms;
+}
+.cmdkBtn:hover {
+  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+}
+.cmdkLabel { font-size: 13px; letter-spacing: 0.5px; }
+
+/* ─── AI Latency benchmark button (reused from before) ─── */
+.benchmarkBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 12px; height: 30px; font-size: 14px; font-weight: 700;
+  border: 1px solid var(--color-border); border-radius: 6px;
+  background: var(--color-surface); color: var(--color-text);
+  cursor: pointer; font-family: var(--font-mono); transition: all 150ms;
+}
+.benchmarkBtn:hover {
+  border-color: #00ff88; color: #00ff88; background: rgba(0, 255, 136, 0.08);
+}
+.benchmarkActive {
+  border-color: #00ff88 !important; color: #00ff88 !important;
+  background: rgba(0, 255, 136, 0.12) !important;
+  cursor: not-allowed;
+}
+.benchmarkRunning { display: inline-flex; align-items: center; gap: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  display: inline-block; width: 10px; height: 10px;
+  border: 2px solid rgba(0, 255, 136, 0.3); border-top-color: #00ff88;
+  border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;
+}
+
+/* 📖 Light theme: deep green for the benchmark button outline/hover and
+   📖 the spinner ring so they stay visible on the white header bar. */
+:global([data-theme="light"]) .benchmarkBtn:hover {
+  border-color: #008f4d; color: #008f4d; background: rgba(0, 143, 77, 0.06);
+}
+:global([data-theme="light"]) .benchmarkActive {
+  border-color: #008f4d !important; color: #008f4d !important;
+  background: rgba(0, 143, 77, 0.10) !important;
+}
+:global([data-theme="light"]) .spinner {
+  border-color: rgba(0, 0, 0, 0.1);
+  border-top-color: #008f4d;
+}
+
+/* 📖 Responsive — at narrow widths the nav collapses into the kebab menu.
+   📖 We never reintroduce a left sidebar. The table keeps 100% width. */
+@media (max-width: 1024px) {
+  .navBtn > span:not(.comingBadge) { display: none; }
+  .navBtn { padding: 0 8px; }
+  .center { max-width: 320px; }
+}
+@media (max-width: 768px) {
+  .center { display: none; }
+  .logoText { display: none; }
+  .cmdkLabel { display: none; }
+  .benchmarkBtn > span:not(.benchmarkRunning) { display: none; }
+  .nav { display: none; }
+  .hamburgerBtn { display: flex; }
+}
+@media (max-width: 560px) {
+  .version { display: none; }
+}
+
+/* ─── Hamburger + mobile nav (M5) ─── */
+.hamburgerBtn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin-left: 8px;
+  &:hover { color: var(--color-text); background: var(--color-bg-hover); }
+}
+
+.mobileNav {
+  position: absolute;
+  top: var(--header-h, 60px);
+  left: 0;
+  right: 0;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  padding: 8px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 150;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.mobileNavItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  &:hover { background: var(--color-bg-hover); color: var(--color-text); }
+}
+
+.mobileNavActive {
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+}
+
+.mobileNavDivider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 6px 0;
+}
+
+/* ─── Keyboard Focus & Micro-interaction Active States ─── */
+.navBtn:focus-visible,
+.iconBtn:focus-visible,
+.cmdkBtn:focus-visible,
+.benchmarkBtn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.navBtn:active,
+.iconBtn:active,
+.cmdkBtn:active,
+.benchmarkBtn:active {
+  transform: scale(0.96);
+}

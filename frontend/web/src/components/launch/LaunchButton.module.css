@@ -1,0 +1,35 @@
+/** @file web/src/components/launch/LaunchButton.module.css */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid rgba(61, 220, 132, 0.45);
+  border-radius: 6px;
+  background: rgba(61, 220, 132, 0.12);
+  color: #3ddc84;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  transition: transform 120ms, background 120ms, border-color 120ms;
+}
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(61, 220, 132, 0.20);
+  border-color: rgba(61, 220, 132, 0.75);
+}
+.button:disabled { opacity: 0.45; cursor: not-allowed; }
+.icon {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  opacity: 0.72;
+}
+.icon:hover:not(:disabled) { opacity: 1; }
+:global([data-theme="light"]) .button {
+  color: #087d42;
+  border-color: rgba(8, 125, 66, 0.35);
+  background: rgba(8, 125, 66, 0.08);
+}

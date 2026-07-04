@@ -1,0 +1,435 @@
+/**
+ * @file web/src/components/dashboard/ModelTable.module.css
+ * @description Styles for ModelTable with TanStack Table — full horizontal scroll.
+ * 📖 Seamless layout: the container is flush with the page edges (no margin,
+ * 📖 no left/right border) so the table runs full-bleed below the sticky
+ * 📖 header + sticky FilterBar. Only the bottom border remains.
+ */
+.container {
+  background: var(--color-bg-card);
+  border-top: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  /* 📖 The container itself doesn't scroll — it is the relative clip box
+     📖 hosting the scrolling table (.scrollInner). overflow:hidden keeps the
+     📖 sticky header + virtualized rows neatly clipped to the table viewport.
+     📖 isolation:isolate creates a clean stacking context so the sticky
+     📖 <thead> header (z-index 10) reliably layers above body cells. */
+  overflow: hidden;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 📖 The real scroll surface for the table. It is the scroll element for
+   📖 both the sticky <thead> header and the @tanstack/react-virtual row
+   📖 virtualizer (only ~23 of 189 rows live in the DOM at any time). */
+.scrollInner {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.table {
+  width: 100%;
+  min-width: 1200px;
+  border-collapse: collapse;
+  font-size: 14px;
+  border: 0;
+}
+
+/* ─── Header ─── */
+.th {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border-bottom: 2px solid var(--color-border);
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  text-align: center;
+  transition: all 120ms var(--ease-out);
+  /* 📖 Disable user-select on the whole header so dragging the resize handle
+     📖 never accidentally selects the cell text on rapid drags. */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+.th:last-child { border-right: 0; }
+.th:hover { color: var(--color-bg); background: var(--color-accent-hover); }
+
+/* 📖 Inner flex container: header label on the left, resize handle on the right.
+   📖 Letting the label shrink keeps the column tight when the user makes it narrow. */
+.thInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+.thLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* 📖 Resize handle: a 6px-wide grab zone on the right edge of every header.
+   📖 The visible bar is 2px wide and centered in the grab zone so users get
+   📖 generous hit-target without it looking like a hard line. */
+.resizeHandle {
+  flex-shrink: 0;
+  width: 6px;
+  height: 22px;
+  margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+  /* 📖 Stop the click from also triggering the header's sort handler. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.resizeHandle::after {
+  content: '';
+  display: block;
+  width: 2px;
+  height: 14px;
+  background: transparent;
+  border-radius: 1px;
+  transition: background 120ms var(--ease-out, ease);
+}
+.resizeHandle:hover::after,
+.resizeHandleActive::after {
+  background: var(--color-accent);
+}
+.resizeHandleActive {
+  cursor: col-resize;
+}
+/* 📖 While a column is actively resizing, highlight its entire header and freeze
+   📖 the cursor on the whole document so dragging off the handle still works. */
+.th:has(.resizeHandleActive) {
+  background: var(--color-bg-active);
+  color: var(--color-accent);
+}
+:global(.col-resizing) {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* 📖 Floating bar shown only when the user has custom column widths.
+   📖 Rendered OUTSIDE the scroller (a normal flex child at the top of the
+   📖 table container) so it stays put without colliding with the sticky
+   📖 <thead>. It shrinks the scroll area; the sticky header sticks below it. */
+.resizeToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.resizeToolbarHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.2px;
+}
+.resizeToolbarHint strong {
+  color: var(--color-text);
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.resizeResetButton {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--color-border-hover);
+  color: var(--color-text-muted);
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms var(--ease-out, ease), color 120ms var(--ease-out, ease), border-color 120ms var(--ease-out, ease);
+  white-space: nowrap;
+}
+.resizeResetButton:hover {
+  background: var(--color-bg-active);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.resizeResetButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Center certain columns */
+.th:nth-child(6) { text-align: left; }   /* Model */
+.th:nth-child(7) { text-align: left; }   /* Provider */
+.th:nth-child(11) { text-align: left; } /* Verdict */
+
+/* Sort icons */
+.sortIcon   { opacity: 0.4; margin-left: 3px; font-size: 9px; color: var(--color-bg); }
+.sortIconActive { color: var(--color-bg); margin-left: 3px; font-size: 10px; font-weight: 900; }
+
+/* ─── Data cells ─── */
+.td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.td:last-child { border-right: 0; }
+.td:nth-child(6) { text-align: left; }   /* Model */
+.td:nth-child(7) { text-align: left; }   /* Provider */
+.td:nth-child(11) { text-align: left; } /* Verdict */
+
+/* 📖 Center the BOOKMARKS column (star button) so it sits nicely in its
+   📖 wider header. Other narrow numeric columns are centered by default. */
+.td:nth-child(1),
+.th:nth-child(1) { text-align: center; }
+
+/* ─── Row hover ─── */
+.table tbody tr {
+  cursor: pointer;
+  transition: background 100ms;
+}
+.table tbody tr:hover { background: var(--color-bg-hover); }
+
+/* ─── Medal rows ─── */
+.rank1 td:first-child { border-left: 3px solid #ffd700; }
+.rank2 td:first-child { border-left: 3px solid #c0c0c0; }
+.rank3 td:first-child { border-left: 3px solid #cd7f32; }
+
+/* ─── Shared cell values ─── */
+.rankNum {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-dim);
+  text-align: center;
+  display: block;
+}
+
+.swe { font-family: var(--font-mono); font-weight: 600; }
+.sweHigh { color: #ffd700; }
+.sweMid  { color: #3ddc84; }
+.sweLow  { color: var(--color-text-dim); }
+
+.ctx { font-family: var(--font-mono); font-size: 13px; }
+
+.ping { font-family: var(--font-mono); font-weight: 600; }
+.pingFast   { color: #00ff88; }
+.pingMedium { color: #ffaa00; }
+.pingSlow   { color: #ff4444; }
+.pingNone   { color: var(--color-text-dim); }
+
+/* 📖 Light theme: darker SWE + ping colors. */
+:global([data-theme="light"]) .sweHigh   { color: #7a5e00; }
+:global([data-theme="light"]) .sweMid    { color: #1f7a3e; }
+:global([data-theme="light"]) .pingFast   { color: #008f4d; }
+:global([data-theme="light"]) .pingMedium { color: #b86b00; }
+:global([data-theme="light"]) .pingSlow   { color: #c8143a; }
+
+.uptime { font-family: var(--font-mono); font-size: 13px; }
+
+/* ─── Model cell ─── */
+.modelCell    { display: flex; align-items: center; gap: 6px; overflow: hidden; }
+.modelMeta    { flex: 1; min-width: 0; }
+.modelHeader  { display: flex; align-items: center; gap: 5px; }
+.modelName    { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modelId      { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 📖 Provider cell now uses <ProviderLogo /> (icon + wordmark) — see
+   📖 atoms/ProviderLogo.module.css for the layout. The old bordered pill
+   📖 was replaced; no extra styling is needed here. */
+
+/* ─── Benchmarking row highlight ── */
+@keyframes benchRowPulse {
+  0%, 100% { background: rgba(180, 0, 255, 0.04); }
+  50%       { background: rgba(180, 0, 255, 0.10); }
+}
+.benchRow {
+  animation: benchRowPulse 1.2s ease-in-out infinite;
+}
+
+/* ─── Empty state ─── */
+:global([data-theme="light"]) .container {
+  border-color: #cfcfcf;
+}
+
+:global([data-theme="light"]) .table {
+  border-color: #cfcfcf;
+}
+
+:global([data-theme="light"]) .th,
+:global([data-theme="light"]) .td {
+  border-color: #d8d8d8;
+}
+
+.empty { text-align: center; padding: 60px 0; color: var(--color-text-muted); }
+
+/* ─── M1: favorites star button (TUI `F` key) ─── */
+.favBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 120ms, background 120ms, transform 120ms;
+}
+.favBtn:hover {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.10);
+  transform: scale(1.1);
+}
+.favBtnActive {
+  color: #ffd700;
+}
+.favBtnActive:hover {
+  color: #ffae00;
+  background: rgba(255, 174, 0, 0.14);
+}
+:global([data-theme="light"]) .favBtn { color: #999; }
+:global([data-theme="light"]) .favBtn:hover { color: #b08800; background: rgba(176, 136, 0, 0.10); }
+:global([data-theme="light"]) .favBtnActive { color: #b08800; }
+
+/* ─── M1: clickable AI Lat. cell (TUI `Ctrl+A`) ─── */
+.aiLatencyWrap {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  position: relative;
+  transition: background 100ms;
+}
+.aiLatencyWrap:hover {
+  background: rgba(180, 0, 255, 0.08);
+}
+.aiLatencyWrap.aiLatencyRunning { cursor: progress; }
+.aiLatencyWrap.aiLatencyRunning:hover { background: transparent; }
+.aiLatencyPlay {
+  opacity: 0;
+  color: #b400ff;
+  transition: opacity 100ms;
+}
+.aiLatencyWrap:hover .aiLatencyPlay { opacity: 1; }
+.aiLatencyRunning .aiLatencyPlay { display: none; }
+
+/* ─── M1: dark-red row for tool-incompatible models ─── */
+.incompatible td {
+  background: rgba(255, 0, 0, 0.06) !important;
+  color: var(--color-text-muted) !important;
+}
+.incompatible:hover td {
+  background: rgba(255, 0, 0, 0.10) !important;
+}
+:global([data-theme="light"]) .incompatible td {
+  background: rgba(200, 20, 58, 0.06) !important;
+  color: #888 !important;
+}
+
+/* ─── M4: 80% opacity for "unusable" rows (NO KEY / AUTH FAIL) ───
+   📖 Mirrors the TUI's fadedRow() behavior so the same scan-and-spot
+   📖 UX works on every surface. Applied to the whole <tr> via opacity
+   📖 so it composes cleanly with rank/bench/incompatible styles. The
+   📖 fade is held steady on hover so the "you cannot use this" signal
+   📖 never disappears while the user is checking what is on the row. */
+.unusable {
+  opacity: 0.8;
+}
+.unusable:hover {
+  opacity: 0.8;
+}
+
+/* 📖 Models not in the active router set — slightly faded so users can
+   📖 instantly see which models are being tested vs just cataloged. */
+.notInSetRow {
+  opacity: 0.6;
+}
+.notInSetRow:hover {
+  opacity: 0.85;
+}
+
+/* ─── M3: per-row endpoint install plug ─── */
+.launchCell {
+  display: flex;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.table tbody tr:hover .launchCell,
+.incompatible .launchCell,
+.benchRow .launchCell {
+  opacity: 1;
+}
+
+/* ─── Expandable row styles ─── */
+.expandedRow td {
+  background: var(--color-accent) !important;
+  color: var(--color-bg) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15) !important;
+}
+.expandedRow td * {
+  color: var(--color-bg) !important;
+}
+.expandedRow :global(.status-dot) {
+  border-color: var(--color-bg) !important;
+}
+.expandedRow :global(.provider-wordmark) {
+  filter: brightness(0) saturate(100%) !important; /* Forces logos to render dark/black for contrast */
+}
+.expandedRow .rankNum,
+.expandedRow .modelId {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+.expandedRow .sweLow,
+.expandedRow .sweMid,
+.expandedRow .sweHigh {
+  color: var(--color-bg) !important;
+}
+.expandedRow .pingFast,
+.expandedRow .pingMedium,
+.expandedRow .pingSlow {
+  color: var(--color-bg) !important;
+  font-weight: 800;
+}
+.expandRowWrapper {
+  border: none;
+}
+.expandRowCell {
+  padding: 0 !important;
+  border-bottom: 3px solid var(--color-accent) !important;
+  background: var(--color-bg-elevated) !important;
+}
+.expandRowCell * {
+  color: inherit;
+}

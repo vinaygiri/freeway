@@ -1,0 +1,11 @@
+{
+  "name": "free-coding-models-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../scripts/dev-web.mjs",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}

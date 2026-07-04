@@ -1,0 +1,113 @@
+name: Post all issue activity to Discord
+
+on:
+  issues:
+  issue_comment:
+
+jobs:
+  notify-discord:
+    # issue_comment marche aussi pour les PR, donc on filtre
+    if: github.event_name != 'issue_comment' || !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send issue activity to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_ISSUES }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          REPO_NAME: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -e
+
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "Missing DISCORD_ISSUES secret"
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "issues" ]; then
+            TITLE=$(jq -r '.issue.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.issue.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.issue.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.issue.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.issue.body // "No description"' "$GITHUB_EVENT_PATH" | head -c 800)
+
+            EMOJI="📌"
+            LABEL="$ACTION"
+
+            case "$ACTION" in
+              opened) EMOJI="🆕"; LABEL="opened issue" ;;
+              edited) EMOJI="✏️"; LABEL="edited issue" ;;
+              deleted) EMOJI="🗑️"; LABEL="deleted issue" ;;
+              transferred) EMOJI="🔁"; LABEL="transferred issue" ;;
+              pinned) EMOJI="📌"; LABEL="pinned issue" ;;
+              unpinned) EMOJI="📍"; LABEL="unpinned issue" ;;
+              closed) EMOJI="✅"; LABEL="closed issue" ;;
+              reopened) EMOJI="♻️"; LABEL="reopened issue" ;;
+              assigned) EMOJI="👤"; LABEL="assigned issue" ;;
+              unassigned) EMOJI="🚫"; LABEL="unassigned issue" ;;
+              labeled) EMOJI="🏷️"; LABEL="labeled issue" ;;
+              unlabeled) EMOJI="🏷️"; LABEL="unlabeled issue" ;;
+              locked) EMOJI="🔒"; LABEL="locked issue" ;;
+              unlocked) EMOJI="🔓"; LABEL="unlocked issue" ;;
+              milestoned) EMOJI="🎯"; LABEL="milestoned issue" ;;
+              demilestoned) EMOJI="🎯"; LABEL="removed milestone" ;;
+              typed) EMOJI="🧩"; LABEL="typed issue" ;;
+              untyped) EMOJI="🧩"; LABEL="untyped issue" ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub Issues" \
+              --arg title "$EMOJI Issue #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nAuthor: **$AUTHOR**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          if [ "$EVENT_NAME" = "issue_comment" ]; then
+            TITLE=$(jq -r '.issue.title // "No title"' "$GITHUB_EVENT_PATH")
+            URL=$(jq -r '.comment.html_url // .issue.html_url // ""' "$GITHUB_EVENT_PATH")
+            NUMBER=$(jq -r '.issue.number // ""' "$GITHUB_EVENT_PATH")
+            AUTHOR=$(jq -r '.comment.user.login // "unknown"' "$GITHUB_EVENT_PATH")
+            BODY=$(jq -r '.comment.body // "No comment text"' "$GITHUB_EVENT_PATH" | head -c 800)
+
+            EMOJI="💬"
+            LABEL="$ACTION issue comment"
+
+            case "$ACTION" in
+              created) EMOJI="💬"; LABEL="new issue comment" ;;
+              edited) EMOJI="✏️"; LABEL="edited issue comment" ;;
+              deleted) EMOJI="🗑️"; LABEL="deleted issue comment" ;;
+            esac
+
+            jq -n \
+              --arg username "GitHub Issues" \
+              --arg title "$EMOJI Issue #$NUMBER — $LABEL" \
+              --arg url "$URL" \
+              --arg description "Repo: **$REPO_NAME**\nAuthor: **$AUTHOR**\n\n**$TITLE**\n\n$BODY" \
+              '{
+                username: $username,
+                embeds: [
+                  {
+                    title: $title,
+                    url: $url,
+                    description: $description
+                  }
+                ]
+              }' > payload.json
+          fi
+
+          curl -sS -H "Content-Type: application/json" \
+               -X POST \
+               -d @payload.json \
+               "$DISCORD_WEBHOOK_URL"

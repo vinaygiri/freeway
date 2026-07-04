@@ -1,0 +1,184 @@
+name: Build and Publish Docker Image
+
+# 📖 Auto-build Docker on every successful npm release. The workflow fires
+# 📖 whenever the `Release` workflow completes successfully (regardless of
+# 📖 whether the npm publish tagged the git commit, the GH release was
+# 📖 created, or the version was manually forced) — this guarantees the
+# 📖 Docker image stays in lockstep with the npm package version.
+#
+# 📖 The legacy `push: tags: v*.*.*` trigger was unreliable (it stopped
+# 📖 firing after v0.3.72) so it's been replaced. `workflow_dispatch` is kept
+# 📖 for ad-hoc manual builds (e.g. test a Dockerfile change without going
+# 📖 through a full release).
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Test mode (dry run without pushing)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  LOGIN_PASSWORD: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+
+jobs:
+  build-and-push:
+    # 📖 Two valid trigger paths:
+    # 📖  - workflow_run from a successful Release → always build
+    # 📖  - workflow_dispatch (manual) → build unless test_mode=true
+    # 📖 Manual test_mode just runs the build to validate the Dockerfile
+    # 📖 without pushing to ghcr.io.
+    if: ${{
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode != 'true')
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      # 📖 Pin the checkout to the exact commit that the Release workflow
+      # 📖 published. Without this, `on: workflow_run` would check out the
+      # 📖 workflow_run.head_sha (the commit that *contained* the trigger)
+      # 📖 which can drift from the published artifact on heavy-traffic repos.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      # 📖 Verify lockfile sync before installing dependencies
+      - name: Verify pnpm lockfile sync
+        run: |
+          pnpm install --no-frozen-lockfile
+          git diff --exit-code pnpm-lock.yaml || (echo "❌ pnpm-lock.yaml out of sync with package.json" && exit 1)
+      # 📖 Install dependencies
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 📖 The web build regenerates favicons from icon.png before Vite runs.
+      # 📖 Ubuntu runners do not guarantee ImageMagick is present, so install it
+      # 📖 here just like the npm release workflow does.
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
+      - name: Build web app
+        run: pnpm build:web
+
+      - name: Verify pnpm version
+        run: pnpm --version
+
+      # 📖 QEMU is required for cross-platform builds (e.g. building ARM64
+      # 📖 images on an AMD64 GitHub runner). Without it, buildx can only
+      # 📖 build the native architecture of the runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ env.LOGIN_PASSWORD }}
+
+      - name: Extract version
+        id: version
+        # 📖 Read the version from package.json. The metadata step's built-in
+        # 📖 `type=semver` only works on tag-push events, but our primary
+        # 📖 trigger is `workflow_run` — so we pipe the version through here
+        # 📖 and feed it back as a `type=raw` tag. That way, every Docker
+        # 📖 build is tagged with the actual published version, regardless of
+        # 📖 whether the trigger was a tag push, workflow_run, or manual
+        # 📖 workflow_dispatch.
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "  • Docker build will be tagged: ${VERSION}, latest, sha-*"
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=
+            # 📖 The version read from package.json above — used as a
+            # 📖 fallback so workflow_run and workflow_dispatch builds
+            # 📖 still get a human-readable version tag.
+            type=raw,value=${{ steps.version.outputs.version }}
+            # 📖 `latest` is always set on default-branch builds so users
+            # 📖 can `docker pull ghcr.io/.../free-coding-models:latest`
+            # 📖 without depending on a tag-push trigger.
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          # 📖 Push on every real release path: automatic after a successful
+          # 📖 Release (workflow_run), or manual workflow_dispatch without
+          # 📖 test_mode. The old `release` / `push tags` branches are kept
+          # 📖 for back-compat in case someone re-enables them.
+          push: ${{ github.event_name == 'release' || github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode != 'true') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 📖 Multi-platform: amd64 (x86_64) + arm64 (Apple Silicon, AWS
+          # 📖 Graviton, Raspberry Pi 4+). QEMU handles cross-compilation.
+          # 📖 In test_mode (load=true) we only build the runner's native
+          # 📖 arch because `load` doesn't support multi-platform manifests.
+          platforms: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode == 'true') && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          no-cache: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode == 'true' }}
+          load: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_mode == 'true' }}
+        env:
+          DOCKER_BUILDKIT: '1'
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+      - name: Run Trivy vulnerability scanner
+        if: ${{ github.repository_owner == 'vava-nessa' && github.event_name != 'workflow_dispatch' }}
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
+        with:
+          # 📖 When the trigger is workflow_run, the canonical version is
+          # 📖 the one we just published (read by docker/metadata-action from
+          # 📖 the checked-out package.json). The "latest" tag is the simplest
+          # 📖 always-current ref for the security scan.
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: ${{ github.repository_owner == 'vava-nessa' && github.event_name != 'workflow_dispatch' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'

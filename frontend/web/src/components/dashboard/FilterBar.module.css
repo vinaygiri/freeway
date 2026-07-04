@@ -1,0 +1,342 @@
+/**
+ * @file web/src/components/dashboard/FilterBar.module.css
+ * @description Filter bar styles — M1 parity chips (tier, status, verdict, health,
+ * visibility, provider, custom text filter, reset, ping mode).
+ * 📖 The bar is a STATIC header above the model table (flex-shrink:0). It used
+ * 📖 to be `position: sticky; top: 60px` for the old whole-page-scroll layout,
+ * 📖 but the dashboard now scrolls the table INTERNALLY (main.dashboardView is
+ * 📖 the bounded box, .scrollInner scrolls). With main as the scroll container,
+ * 📖 `top: 60px` stuck the bar 60px DOWN inside main, dropping it over the
+ * 📖 table's green <thead>. Since the bar lives OUTSIDE the internal scroller,
+ * 📖 it is naturally always visible — no sticky needed. Keep z-index modest so
+ * 📖 it never fights the sticky table header (z-index: 10) if they ever meet.
+ */
+
+.filters {
+  position: relative; z-index: 5;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 20px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+}
+
+.group { display: flex; align-items: center; gap: 6px; }
+
+.filterLabel {
+  font-size: 12px; font-weight: 700; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* ── Collapsible filter groups (Tier, Status, Verdict, Health) ── */
+.filterGroup {
+  position: relative;
+}
+
+.filterTrigger {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-family: var(--font-mono);
+  padding: 4px 8px; border-radius: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer; transition: all 150ms;
+  white-space: nowrap;
+  user-select: none;
+}
+.filterTrigger:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+.filterTriggerActive {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+.filterTriggerExpanded {
+  border-color: var(--color-accent);
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  z-index: 101;
+}
+
+.filterTriggerLabel {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+}
+.filterTriggerSep {
+  color: var(--color-border);
+  margin: 0 -2px;
+}
+.filterTriggerValue {
+  font-weight: 700;
+  color: var(--color-text);
+}
+.filterTriggerActive .filterTriggerValue {
+  color: var(--color-accent);
+}
+
+.filterTriggerChevron {
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+  opacity: 0.6;
+}
+.chevronOpen {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.filterDropdown {
+  position: absolute; top: 100%; left: 0;
+  z-index: 100;
+  padding: 6px 8px 7px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-accent);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  min-width: max-content;
+}
+
+.filterChipRow {
+  display: flex;
+  gap: 0;
+}
+
+.filterChip {
+  font-size: 13px; font-weight: 600; font-family: var(--font-mono);
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  cursor: pointer; transition: all 120ms;
+  white-space: nowrap;
+  margin-left: -1px;
+}
+.filterChip:first-child {
+  border-radius: 4px 0 0 4px;
+  margin-left: 0;
+}
+.filterChip:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.filterChip:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+  z-index: 1;
+}
+.filterChipActive {
+  background: var(--chip-active-color, var(--color-accent)) !important;
+  color: #fff !important;
+  border-color: var(--chip-active-color, var(--color-accent)) !important;
+  z-index: 2;
+  font-weight: 700;
+}
+
+/* ── Select inputs (provider, visibility) ── */
+.select, .providerSelect {
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: 5px;
+  padding: 4px 8px; font-size: 13px; font-family: var(--font-sans);
+  cursor: pointer; outline: none;
+  min-width: 130px;
+}
+.select:focus, .providerSelect:focus { border-color: var(--color-accent); }
+
+.toolStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.toolStatus strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* ── Spacer + reset ── */
+.spacer { flex: 1; }
+
+.resetBtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 700; font-family: var(--font-mono);
+  padding: 4px 9px; border-radius: 5px;
+  border: 1px solid var(--color-border-hover);
+  background: var(--color-accent-dim);
+  color: var(--color-text);
+  cursor: pointer; transition: all 150ms;
+}
+.resetBtn:hover {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+.resetBadge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px;
+  font-size: 11px; font-weight: 800;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  border-radius: 999px;
+  padding: 0 4px;
+}
+
+/* ── Custom text filter chip (TUI Ctrl+P "Apply text filter") ── */
+.customFilterChip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; font-family: var(--font-mono);
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border-radius: 5px;
+  max-width: 240px;
+}
+.customFilterIcon { display: inline-flex; flex-shrink: 0; }
+.customFilterLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.customFilterClear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  background: transparent;
+  border: none;
+  color: var(--color-accent);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.customFilterClear:hover { background: var(--color-accent); color: var(--color-bg); }
+
+/* ── Next ping countdown (TUI parity) ── */
+.nextPing {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-family: var(--font-mono);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+}
+.nextPingLabel {
+  font-size: 12px; font-weight: 500; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.nextPingTime {
+  font-size: 15px; font-weight: 700; color: var(--color-text);
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
+.live {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; color: var(--color-accent);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.liveDot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-accent); animation: pulseDot 2s ease-in-out infinite;
+}
+
+/* ── Global benchmark progress bar (Ctrl+U) ── */
+.benchmarkBar {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(180, 0, 255, 0.12);
+  border: 1px solid rgba(180, 0, 255, 0.4);
+  border-radius: 6px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  width: 100%;
+  margin-bottom: 4px;
+}
+.benchmarkLabel {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 700;
+  color: #b400ff; font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.benchmarkSpinner {
+  display: inline-block;
+  animation: spinSp 0.8s linear infinite;
+  font-size: 14px; line-height: 1;
+}
+.benchmarkCount { font-size: 12px; opacity: 0.8; }
+.benchmarkTrack {
+  width: 120px; height: 5px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden;
+  flex: 1;
+}
+.benchmarkFill {
+  height: 100%;
+  background: linear-gradient(90deg, #b400ff, #ff00ff);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+.benchmarkPct {
+  font-size: 13px; font-weight: 700;
+  color: #b400ff; font-family: var(--font-mono);
+  min-width: 32px; text-align: right;
+}
+
+@keyframes spinSp {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Search Bar ─── */
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0 6px;
+  height: 24px;
+  width: 125px;
+  transition: border-color 150ms, box-shadow 150ms, width 200ms var(--ease-out);
+}
+.searchBar:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-glow);
+  width: 180px;
+}
+.searchIcon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.searchInput {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-size: 10.5px;
+  font-family: var(--font-sans);
+  min-width: 0;
+  padding: 0;
+}
+.searchInput::placeholder {
+  color: var(--color-text-dim);
+  font-size: 10px;
+}

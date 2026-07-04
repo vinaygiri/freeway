@@ -1,6 +1,18 @@
 MIT License
 
-Copyright (c) 2026 Giragouda Patil
+Copyright (c) 2026 Vinay Patil
+
+This project is a derivative/combined work that incorporates source code from
+two upstream MIT-licensed projects. Their original copyright and license notices
+are retained in the LICENSES/ directory and continue to apply to their
+respective portions of this software:
+
+  - free-claude-code   — Copyright (c) 2026 Ali Khokhar
+                         LICENSES/free-claude-code-LICENSE.txt
+  - free-coding-models — Copyright (c) 2025-2026 vava-nessa
+                         LICENSES/free-coding-models-LICENSE.txt
+
+See NOTICE for an attribution summary.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

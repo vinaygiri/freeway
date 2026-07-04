@@ -1,0 +1,15 @@
+# 📖 CODEOWNERS — all changes require review from the project maintainer
+# @vava-nessa is the sole codeowner for all paths
+
+# Default owners for everything in the repo
+*       @vava-nessa
+
+# CI/CD workflows — critical supply chain files
+/.github/workflows/    @vava-nessa
+
+# Security policy
+/SECURITY.md           @vava-nessa
+
+# Package manifest and lockfile
+/package.json          @vava-nessa
+/pnpm-lock.yaml        @vava-nessa

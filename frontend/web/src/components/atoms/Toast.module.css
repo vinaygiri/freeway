@@ -1,0 +1,41 @@
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  font-weight: 500;
+  animation: slideIn 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 280px;
+  max-width: 420px;
+}
+.success { border-left: 4px solid #00ff88; }
+.error   { border-left: 4px solid #ff4444; }
+.warning { border-left: 4px solid #ffaa00; }
+.info    { border-left: 4px solid #06b6d4; }
+
+/* 📖 Light theme: deeper accent bars so they pop on the white toast card. */
+:global([data-theme="light"]) .success { border-left-color: #008f4d; }
+:global([data-theme="light"]) .error   { border-left-color: #c8143a; }
+:global([data-theme="light"]) .warning { border-left-color: #b86b00; }
+:global([data-theme="light"]) .info    { border-left-color: #0e7490; }
+.icon    { font-size: 18px; flex-shrink: 0; }
+.message { flex: 1; }
+.close {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  line-height: 1;
+}
+.exiting { animation: slideOut 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }

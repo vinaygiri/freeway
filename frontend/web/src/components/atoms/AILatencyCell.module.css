@@ -1,0 +1,51 @@
+.cell {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 70px;
+  transition: background 200ms;
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.value { }
+.fast   { color: #00ff88; }
+.medium { color: #ffaa00; }
+.slow   { color: #ff4444; }
+.dim    { color: var(--color-text-dim); }
+.running { color: #b400ff; font-weight: 700; }
+.badge  { color: #06b6d4; font-size: 10px; }
+
+/* ── Running/benchmarking row highlight ── */
+.runningCell {
+  background: rgba(180, 0, 255, 0.12);
+}
+
+/* ── Benchmark spinner: animated ring ── */
+@keyframes benchSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes benchPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(180, 0, 255, 0.4); }
+  50%       { box-shadow: 0 0 0 4px rgba(180, 0, 255, 0); }
+}
+.benchmarkSpinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(180, 0, 255, 0.3);
+  border-top-color: #b400ff;
+  border-radius: 50%;
+  animation: benchSpin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* 📖 Light theme: swap the neon palette for darker, AA-contrast shades. The
+   📖 purple running color stays vibrant since it works on both backgrounds. */
+:global([data-theme="light"]) .fast   { color: #008f4d; }
+:global([data-theme="light"]) .medium { color: #b86b00; }
+:global([data-theme="light"]) .slow   { color: #c8143a; }
+:global([data-theme="light"]) .badge  { color: #0e7490; }
+:global([data-theme="light"]) .runningCell { background: rgba(125, 0, 180, 0.08); }

@@ -1,0 +1,427 @@
+.overlay {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--color-bg-card, #080908);
+  border: 1px solid var(--color-border, #161a16);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border, #1e1e2e);
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  &:hover { background: var(--bg-hover, #1a1a2e); color: var(--text-primary, #e0e0e0); }
+}
+
+/* Steps */
+.steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border, #1e1e2e);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #555);
+}
+
+.stepActive {
+  color: var(--text-primary, #e0e0e0);
+  font-weight: 600;
+}
+
+.stepDone {
+  color: #00c864;
+}
+
+.stepNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #1e1e2e);
+}
+
+.stepActive .stepNum {
+  background: rgba(0, 200, 100, 0.15);
+  border-color: rgba(0, 200, 100, 0.3);
+  color: #00c864;
+}
+
+.stepDone .stepNum {
+  background: rgba(0, 200, 100, 0.15);
+  border-color: #00c864;
+  color: #00c864;
+}
+
+.stepLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Body */
+.body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 300px;
+}
+
+.stepContent {}
+
+.stepDesc {
+  font-size: 14px;
+  color: var(--text-secondary, #aaa);
+  margin: 0 0 16px 0;
+}
+
+.loading, .empty {
+  color: var(--text-muted, #666);
+  font-size: 13px;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* Pick Grid (Provider + Tool) */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.pickCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary, #aaa);
+  font-size: 13px;
+  transition: all 0.15s ease;
+  &:hover { border-color: var(--text-muted, #666); color: var(--text-primary, #e0e0e0); }
+}
+
+.pickActive {
+  border-color: #00c864;
+  background: rgba(0, 200, 100, 0.08);
+  color: #00c864;
+}
+
+.pickEmoji {
+  font-size: 20px;
+}
+
+.pickLabel {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.pickMeta {
+  font-size: 10px;
+  color: var(--text-muted, #888);
+}
+
+/* Scope Toggle */
+.scopeToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.scopeBtn {
+  padding: 6px 14px;
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 6px;
+  background: var(--bg-secondary, #14141f);
+  color: var(--text-secondary, #aaa);
+  font-size: 12px;
+  cursor: pointer;
+  &:hover { border-color: var(--text-muted, #888); }
+}
+
+.scopeActive {
+  background: rgba(0, 200, 100, 0.1);
+  border-color: rgba(0, 200, 100, 0.3);
+  color: #00c864;
+  font-weight: 600;
+}
+
+/* Model Selection */
+.modelGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.modelCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary, #aaa);
+  font-size: 12px;
+  &:hover { border-color: var(--text-muted, #666); }
+}
+
+.modelSelected {
+  border-color: #00c864;
+  background: rgba(0, 200, 100, 0.08);
+  color: #00c864;
+}
+
+.modelName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelTier {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  background: rgba(0, 200, 255, 0.1);
+  color: #00c8ff;
+  border-radius: 3px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.allNotice {
+  color: var(--text-muted, #888);
+  font-size: 13px;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* Install State */
+.installingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 50px 0;
+  color: var(--text-secondary, #aaa);
+}
+
+.installingLabel {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #e0e0e0);
+}
+
+.installingSub {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+.doneState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 0;
+  text-align: center;
+  animation: doneFadeIn 0.3s ease;
+}
+
+.doneTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.doneSub {
+  margin: 0;
+  color: var(--text-secondary, #aaa);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.doneSub strong {
+  color: var(--text-primary, #e0e0e0);
+}
+
+/* 📖 Animated check circle — scales up with a satisfying bounce */
+.checkCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0, 200, 100, 0.12);
+  color: #00c864;
+  animation: checkPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.errorDot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(220, 53, 69, 0.12);
+  color: #dc3545;
+  font-size: 28px;
+  font-weight: 700;
+  animation: checkPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.installPath {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  background: var(--bg-secondary, #14141f);
+  padding: 4px 10px;
+  border-radius: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes doneFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes donePop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes checkPop {
+  0%   { transform: scale(0); opacity: 0; }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border, #1e1e2e);
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  background: var(--bg-secondary, #14141f);
+  border: 1px solid var(--border, #1e1e2e);
+  border-radius: 8px;
+  color: var(--text-secondary, #aaa);
+  font-size: 13px;
+  cursor: pointer;
+  &:hover { color: var(--text-primary, #e0e0e0); }
+}
+
+.nextBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 18px;
+  background: #00c864;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  &:hover { background: #00d874; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.doneBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 28px;
+  background: #00c864;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: auto;
+  transition: transform 0.15s ease, background 0.15s ease;
+  &:hover { background: #00d874; transform: scale(1.02); }
+  &:active { transform: scale(0.98); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

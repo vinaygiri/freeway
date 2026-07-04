@@ -1,0 +1,44 @@
+.cell {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+  transition: background 200ms;
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.value { }
+.fast   { color: #00ff88; }
+.slow   { color: #ff4444; }
+.dim    { color: var(--color-text-dim); }
+.running { color: #b400ff; font-weight: 700; }
+.badge  { color: #06b6d4; font-size: 10px; }
+
+/* ── Running row highlight ── */
+.runningCell {
+  background: rgba(180, 0, 255, 0.12);
+}
+
+/* ── Mini spinner matching AILatencyCell ── */
+@keyframes miniSpin {
+  to { transform: rotate(360deg); }
+}
+.miniSpinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(180, 0, 255, 0.3);
+  border-top-color: #b400ff;
+  border-radius: 50%;
+  animation: miniSpin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* 📖 Light theme overrides — match AILatencyCell. */
+:global([data-theme="light"]) .fast   { color: #008f4d; }
+:global([data-theme="light"]) .slow   { color: #c8143a; }
+:global([data-theme="light"]) .badge  { color: #0e7490; }
+:global([data-theme="light"]) .runningCell { background: rgba(125, 0, 180, 0.08); }

@@ -1,0 +1,356 @@
+/**
+ * @file web/src/components/dashboard/ExpandedDetailRow.module.css
+ * @description CSS module for the 3-column expandable detail row shown beneath a table row.
+ * 📖 Columns: Info (left), Mini Playground (center), AI Latency Test (right).
+ * 📖 Supports dark/light themes via CSS variables and [data-theme="light"] overrides.
+ * 📖 Responsive: collapses to single column on screens < 900px.
+ */
+
+/* ─── Root container ─── */
+.row {
+  grid-column: 1 / -1;
+  padding: 16px 20px;
+  background: var(--color-bg-elevated);
+  border-bottom: 2px solid var(--color-accent);
+  animation: slideDown 180ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 600px;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  gap: 20px;
+  min-height: 220px;
+}
+
+/* ─── Column shared ─── */
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colTitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+/* ─── Column 1: Info ─── */
+.statGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-dim);
+}
+
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.infoActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.favBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.favBtn:hover {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.08);
+}
+.favBtnActive {
+  border-color: #ffd700;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.12);
+}
+:global([data-theme="light"]) .favBtn { color: #555; }
+:global([data-theme="light"]) .favBtn:hover { color: #b08800; border-color: #b08800; background: rgba(176, 136, 0, 0.06); }
+:global([data-theme="light"]) .favBtnActive { color: #b08800; border-color: #b08800; background: rgba(176, 136, 0, 0.10); }
+
+/* ─── Column 2: Mini Playground ─── */
+.playgroundHeader {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+/* 📖 Wrapper that lets the shared PlaygroundChat fill the column height so its
+   transcript scrolls and the input stays pinned to the bottom. */
+.playgroundWrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+}
+
+.inputRow {
+  display: flex;
+  gap: 6px;
+}
+
+.inputField {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 150ms;
+}
+.inputField:focus {
+  border-color: var(--color-accent);
+}
+.inputField::placeholder {
+  color: var(--color-text-dim);
+}
+.inputField:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms;
+  white-space: nowrap;
+}
+.sendBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.sendBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.responseArea {
+  flex: 1;
+  min-height: 60px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.responsePlaceholder {
+  color: var(--color-text-dim);
+  font-style: italic;
+}
+
+/* ─── Column 3: AI Latency ─── */
+.benchBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: rgba(180, 0, 255, 0.12);
+  color: #b400ff;
+  border: 1px solid rgba(180, 0, 255, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms;
+}
+.benchBtn:hover:not(:disabled) {
+  background: rgba(180, 0, 255, 0.20);
+  border-color: rgba(180, 0, 255, 0.7);
+}
+.benchBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+:global([data-theme="light"]) .benchBtn {
+  background: rgba(140, 0, 200, 0.06);
+  color: #6a00a0;
+  border-color: rgba(140, 0, 200, 0.3);
+}
+:global([data-theme="light"]) .benchBtn:hover:not(:disabled) {
+  background: rgba(140, 0, 200, 0.12);
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.metricCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.metricLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-dim);
+}
+
+.metricValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.streamText {
+  min-height: 40px;
+  max-height: 80px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.progressBar {
+  width: 100%;
+  height: 4px;
+  background: var(--color-bg-card);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 2px;
+  transition: width 200ms ease-out;
+}
+
+/* ─── SWE score classes ─── */
+.sweHigh { color: #ffd700; font-weight: 700; }
+.sweMid  { color: #3ddc84; font-weight: 600; }
+.sweLow  { color: var(--color-text-dim); }
+:global([data-theme="light"]) .sweHigh { color: #b08800; }
+:global([data-theme="light"]) .sweMid  { color: #1a8f4e; }
+
+/* ─── Ping classes ─── */
+.pingFast   { color: #00ff88; }
+.pingMedium { color: #ffaa00; }
+.pingSlow   { color: #ff4444; }
+.pingNone   { color: var(--color-text-dim); }
+:global([data-theme="light"]) .pingFast   { color: #008f4d; }
+:global([data-theme="light"]) .pingMedium { color: #b86b00; }
+:global([data-theme="light"]) .pingSlow   { color: #c8143a; }
+
+/* ─── No API key banner ─── */
+.noKeyBanner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 20px;
+  color: var(--color-text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.noKeyIcon {
+  font-size: 20px;
+  opacity: 0.5;
+}
+
+/* ─── Spinning animation ─── */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ─── Responsive: single column below 900px ─── */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

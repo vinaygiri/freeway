@@ -1,0 +1,45 @@
+.cell {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 54px;
+}
+.value { }
+.fast   { color: #00ff88; }
+.medium { color: #ffaa00; }
+.slow   { color: #ff4444; }
+.none   { color: var(--color-text-dim); }
+
+/* ── Animated spinner for active pings ── */
+@keyframes pingPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+@keyframes pingRing {
+  0%   { transform: rotate(0deg) scale(1);   opacity: 1; }
+  70%  { transform: rotate(180deg) scale(0.6); opacity: 0.6; }
+  100% { transform: rotate(360deg) scale(1);   opacity: 1; }
+}
+.spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(0, 255, 136, 0.25);
+  border-top-color: #00ff88;
+  border-radius: 50%;
+  animation: pingRing 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+/* 📖 Light theme: the neon green ring is unreadable on white, swap to a deep
+   📖 green ring on a soft neutral track so the spinner stays visible. */
+:global([data-theme="light"]) .fast   { color: #008f4d; }
+:global([data-theme="light"]) .medium { color: #b86b00; }
+:global([data-theme="light"]) .slow   { color: #c8143a; }
+:global([data-theme="light"]) .spinner {
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: #008f4d;
+}

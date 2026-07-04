@@ -1,0 +1,72 @@
+# 1. Dependencies
+node_modules/
+
+# 2. Build output
+dist/
+build/
+
+# 3. Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 4. Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# 5. Coverage
+coverage/
+.nyc_output/
+
+# 6. OS files
+.DS_Store
+Thumbs.db
+
+# 7. IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 8. Environment
+.env
+.env.local
+.env.*.local
+
+# 9. Test
+.test/
+.tap/
+
+# 10. Package locks
+# Uncomment if you use pnpm or yarn
+# package-lock.json
+# pnpm-lock.yaml
+# yarn.lock
+
+# 11. Local-only telemetry POC (kept out of this repo on purpose)
+private-telemetry/
+
+# 12. Local AI test workflow artifacts
+task/artifacts/*
+!task/artifacts/.gitkeep
+task/reports/*.md
+!task/reports/.gitkeep
+.aider*
+
+# 13. Crush CLI (local tooling)
+.crush/
+
+# 14. Demo assets (large media)
+# demo*.gif
+# demo*.mp4
+
+# 15. Local scratch files (never committed; living notes that are not part of
+#    the public product backlog). The `ideas/` folder still tracks the public
+#    long-form planning docs; this entry only blocks the temporary new-feat
+#    scratchpad used during competitive scans.
+ideas/new_feats_updates.md

@@ -1,0 +1,9 @@
+.rank {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-dim);
+  text-align: center;
+  min-width: 28px;
+}

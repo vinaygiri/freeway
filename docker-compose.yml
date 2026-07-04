@@ -1,0 +1,53 @@
+# Freeway — full local stack: the FastAPI proxy (data plane, port 8082) plus the
+# free-coding-models control plane / router daemon + web dashboard (port 19280).
+#
+# Usage:
+#   1. Build the frontend web assets once on the host (the frontend image copies
+#      a prebuilt web/dist): see scripts/install.sh / scripts/install.ps1.
+#   2. Put provider keys in a local .env next to this file (never commit it).
+#   3. docker compose up --build
+#
+# The proxy is the endpoint your tools point at (Claude Code / Codex / any
+# OpenAI-compatible client). The frontend is the dashboard + model picker.
+
+services:
+  proxy:
+    build:
+      context: ./proxy
+    image: freeway-proxy:local
+    container_name: freeway-proxy
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    # Provider credentials + runtime config come from the local .env (optional).
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      FCC_HOST: "0.0.0.0"
+      FCC_PORT: "8082"
+
+  frontend:
+    build:
+      context: ./frontend
+    image: freeway-frontend:local
+    container_name: freeway-frontend
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    ports:
+      - "19280:19280"
+    environment:
+      FCM_HOST: "0.0.0.0"
+      FCM_PORT: "19280"
+      FREE_CODING_MODELS_TELEMETRY: "0"
+      # Point the dashboard's proxy pass-through at the proxy service.
+      FREEWAY_PROXY_URL: "http://proxy:8082/v1"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - frontend-data:/home/fcm
+
+volumes:
+  frontend-data:

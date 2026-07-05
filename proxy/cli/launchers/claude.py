@@ -11,7 +11,9 @@ from cli.claude_env import (
     CLAUDE_BINARY_NAME,
     CLAUDE_CODE_AUTO_COMPACT_WINDOW,
     claude_auth_token,
+    resolve_auto_compact_window,
 )
+from config.model_quality import context_tokens_for
 from config.settings import get_settings
 
 from .common import preflight_proxy, resolve_client_binary, run_client_process
@@ -46,7 +48,11 @@ def launch(argv: Sequence[str] | None = None) -> None:
             proxy_root_url=proxy_root_url,
             auth_token=settings.anthropic_auth_token,
             base_env=os.environ,
-            auto_compact_window=settings.claude_code_auto_compact_window,
+            auto_compact_window=resolve_auto_compact_window(
+                settings.auto_fit_max_tokens,
+                context_tokens_for(settings.model.split("/", 1)[-1]),
+                settings.claude_code_auto_compact_window,
+            ),
         ),
         binary_name=binary_name,
         display_name=_DISPLAY_NAME,

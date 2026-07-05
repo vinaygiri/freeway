@@ -63,3 +63,61 @@ def trim_tools_to_budget[T: _NamedTool](
         kept.remove(tool)
 
     return kept or None
+
+
+# Content-block types that may only appear as a reply to a preceding tool_use, so a
+# message leading with one must never become the first message after trimming.
+_TOOL_RESULT_TYPES = frozenset(
+    {"tool_result", "web_search_tool_result", "web_fetch_tool_result"}
+)
+
+
+def _message_role(message: Any) -> str:
+    role = getattr(message, "role", None)
+    if role is None and isinstance(message, dict):
+        role = message.get("role")
+    return str(role or "")
+
+
+def _leads_with_tool_result(message: Any) -> bool:
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    first = content[0]
+    block_type = getattr(first, "type", None)
+    if block_type is None and isinstance(first, dict):
+        block_type = first.get("type")
+    return block_type in _TOOL_RESULT_TYPES
+
+
+def trim_messages_to_budget(
+    *,
+    messages: Sequence[Any],
+    system: Any,
+    tools: Any,
+    max_tokens: int,
+    count_tokens: TokenCounter,
+) -> list[Any]:
+    """Drop the oldest conversation turns until the request fits ``max_tokens``.
+
+    Last-resort backstop for when compaction hasn't kept the conversation small
+    enough: preserves Anthropic validity by always keeping the final (current)
+    message and never leaving a leading orphan ``tool_result`` (which requires a
+    preceding ``tool_use``). Best effort — a single over-budget message is kept.
+    """
+    kept = list(messages)
+    if max_tokens <= 0 or len(kept) <= 1:
+        return kept
+    if count_tokens(kept, system, tools) <= max_tokens:
+        return kept
+
+    while len(kept) > 1 and count_tokens(kept, system, tools) > max_tokens:
+        kept.pop(0)
+    # Repair the head: only drops more (never grows the request), so it still fits.
+    while len(kept) > 1 and (
+        _message_role(kept[0]) != "user" or _leads_with_tool_result(kept[0])
+    ):
+        kept.pop(0)
+    return kept

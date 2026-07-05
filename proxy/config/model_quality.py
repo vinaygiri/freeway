@@ -433,3 +433,28 @@ _LOWER = {k.lower(): v for k, v in MODEL_QUALITY.items()}
 def quality_for(model_id: str) -> dict[str, str] | None:
     """Return quality tags for a model id (case-insensitive), or None."""
     return MODEL_QUALITY.get(model_id) or _LOWER.get(model_id.lower())
+
+
+def parse_context_tokens(context: str) -> int | None:
+    """Parse a catalog context string ('128k', '1M', '8192') into an int token count."""
+    text = context.strip().lower().replace("tokens", "").strip()
+    if not text or text == "-":
+        return None
+    multiplier = 1
+    if text.endswith("k"):
+        multiplier, text = 1_000, text[:-1]
+    elif text.endswith("m"):
+        multiplier, text = 1_000_000, text[:-1]
+    try:
+        return int(float(text) * multiplier)
+    except ValueError:
+        return None
+
+
+def context_tokens_for(model_id: str) -> int | None:
+    """Return a model's advertised context window in tokens, or None if unknown."""
+    quality = quality_for(model_id)
+    if not quality:
+        return None
+    context = quality.get("context")
+    return parse_context_tokens(context) if context else None

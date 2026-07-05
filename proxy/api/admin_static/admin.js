@@ -653,7 +653,7 @@ async function setPrimaryModel(ref) {
     showMessage("Can't change the model — MODEL is set by an environment variable. Unset it and restart.", "error");
     return;
   }
-  if (await applyValues({ MODEL: ref }, `Setting model to ${ref}…`)) { await renderModels(); showMessage(`Now routing to ${ref}`, "ok"); }
+  if (await applyValues({ MODEL: ref }, `Setting model to ${ref}…`)) { await renderModels(); showMessage(`Now routing to ${ref} — applies to new requests automatically.`, "ok"); }
 }
 async function toggleFallback(ref, isFallback) {
   // Read the latest chain from state (not a render-time closure) and update it
@@ -872,10 +872,25 @@ async function renderHelp() {
       <p>Define aliases in <em>Routing → Inline @-Directives</em> as <code>key=provider/model</code>, e.g.
       <span class="mono-example">fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b</span>
       Then type <code>@big refactor this</code> in a prompt to route that one message to Cerebras.</p></div>
-      <div class="guide-concept"><h4>Auto-fit (the “request too large” / 413 fix)</h4>
-      <p>Free tiers cap tokens-per-minute; editors send every tool's schema on every request. Set
-      <em>Routing → Auto-fit Budget</em> a bit under your provider's limit and Freeway drops the largest
-      non-essential tools until the request fits. Core coding tools are always kept.</p></div>
+      <div class="guide-concept"><h4>Auto-fit (the “request too large” / 413 · 400 fix)</h4>
+      <p>Editors like Claude Code send every tool's schema plus the whole conversation on every request, which
+      grows past small free limits. Auto-fit trims a too-big request to a budget — first the largest
+      non-essential tool schemas (core coding tools always kept), then the oldest whole turns — so it can't be
+      rejected. <strong>Default is automatic</strong>: the budget is 90% of the routed model's context, so it only
+      trims requests that would exceed the model's own window (working requests are untouched). Set
+      <em>Routing → Auto-fit Budget</em> explicitly only for tiers that cap below their advertised context.</p></div>
+      <div class="guide-concept"><h4>Bounded long sessions (compaction)</h4>
+      <p>Because the whole conversation is resent each turn, long sessions grow. <code>freeway-claude</code> sizes
+      Claude Code's compaction window to your budget / model context, so the conversation compacts and stays
+      bounded instead of overflowing. Pair a <strong>big-context free provider</strong> (Gemini, NVIDIA NIM) with
+      <strong>multiple keys</strong> (<code>PROVIDER_API_KEY=k1,k2,k3</code>, rotated round-robin for more per-minute
+      budget) for long, uninterrupted sessions. <strong>Codex</strong> also sends ~10× smaller requests than Claude Code.</p></div>
+      <div class="guide-concept"><h4>Picking the model</h4>
+      <p><em>Use</em> on the Models page sets the default that every request routes to — you do <strong>not</strong> need to
+      pick a model in the CLI. Freeway maps Claude Code's request to the current default on <strong>every request</strong>,
+      so a change applies to the <strong>next request automatically</strong> (no restart). The only exception: if you pinned a
+      specific model with Claude Code's own <code>/model</code> picker, that per-session choice overrides the default until
+      you clear it or restart <code>freeway-claude</code>.</p></div>
       <div class="guide-concept"><h4>“Ready” vs “Verified”</h4>
       <p><strong>Ready</strong> is <em>provider-level</em>: if a provider's key works and it isn't rate-limited,
       down, or circuit-broken, all of its models show ready — an optimistic count, not a per-model test.

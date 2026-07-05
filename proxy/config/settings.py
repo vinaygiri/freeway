@@ -146,11 +146,15 @@ class Settings(BaseSettings):
     # per-minute limit. Dropping unused ones shrinks the request. Empty = keep all.
     drop_tools: str = Field(default="", validation_alias="DROP_TOOLS")
 
-    # Auto-fit: when an inbound Messages request's estimated token count exceeds
-    # this budget (0 = disabled), drop the largest non-essential tool schemas
-    # (largest first) until it fits — so a request that would 413 on a small
-    # free-tier budget is trimmed to fit instead of failing. Tools named in
-    # AUTO_FIT_KEEP_TOOLS are never dropped (the core coding tools).
+    # Auto-fit: when an inbound Messages request exceeds this budget, drop the
+    # largest non-essential tool schemas (keeping AUTO_FIT_KEEP_TOOLS) and then the
+    # oldest whole turns until it fits — so a request that would 413/400 on a small
+    # free tier is trimmed to fit instead of failing.
+    #   > 0  explicit budget (set to your provider's real per-request limit)
+    #   = 0  auto: 90% of the routed model's advertised context (default; only
+    #        trims requests that would exceed the model's own window, so working
+    #        requests are untouched)
+    #   < 0  disabled
     auto_fit_max_tokens: int = Field(default=0, validation_alias="AUTO_FIT_MAX_TOKENS")
     auto_fit_keep_tools: str = Field(
         default=(

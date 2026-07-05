@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from typing import Any
 
 from loguru import logger
 
-from api.auto_fit import parse_keep_tools, trim_tools_to_budget
+from api.auto_fit import (
+    parse_keep_tools,
+    trim_messages_to_budget,
+    trim_tools_to_budget,
+)
 from api.detection import is_safety_classifier_request
 from api.model_router import ModelRouter, RoutedMessagesRequest
 from api.models.anthropic import MessagesRequest
@@ -24,6 +29,7 @@ from api.web_tools.request import (
     openai_chat_upstream_server_tool_error,
 )
 from api.web_tools.streaming import stream_web_server_tool_response
+from config.model_quality import context_tokens_for
 from config.provider_catalog import PROVIDER_CATALOG
 from config.settings import Settings
 from core.anthropic import get_token_count
@@ -134,35 +140,73 @@ class MessagesHandler:
         new_request = routed.request.model_copy(update={"tools": filtered})
         return RoutedMessagesRequest(request=new_request, resolved=routed.resolved)
 
+    def _resolve_fit_budget(self, routed: RoutedMessagesRequest) -> int:
+        """Token budget for auto-fit: explicit ``AUTO_FIT_MAX_TOKENS`` when > 0, or
+        (default) auto-sized to 90% of the routed model's advertised context so a
+        fresh install protects every provider without manual tuning. Negative
+        disables it; unknown context means no trimming (so behavior is unchanged)."""
+        configured = self._settings.auto_fit_max_tokens
+        if configured > 0:
+            return configured
+        if configured < 0:
+            return 0
+        context = context_tokens_for(routed.resolved.provider_model)
+        return int(context * 0.9) if context else 0
+
     def _apply_auto_fit(self, routed: RoutedMessagesRequest) -> RoutedMessagesRequest:
-        """Trim the largest non-essential tools so the request fits the budget."""
-        max_tokens = self._settings.auto_fit_max_tokens
-        tools = routed.request.tools
-        if max_tokens <= 0 or not tools:
+        """Fit an over-budget request to ``AUTO_FIT_MAX_TOKENS``.
+
+        Two stages: drop the largest non-essential tool schemas first (cheap, keeps
+        conversation intact), then — if the request is *still* over budget because
+        the conversation itself grew too large — drop the oldest whole turns as a
+        last-resort backstop so it can never exceed the provider's limit.
+        """
+        max_tokens = self._resolve_fit_budget(routed)
+        if max_tokens <= 0:
             return routed
-        keep_names = parse_keep_tools(self._settings.auto_fit_keep_tools)
-        kept = trim_tools_to_budget(
-            messages=routed.request.messages,
-            system=routed.request.system,
-            tools=tools,
+        request = routed.request
+        updates: dict[str, Any] = {}
+
+        kept_tools = request.tools
+        if request.tools:
+            keep_names = parse_keep_tools(self._settings.auto_fit_keep_tools)
+            kept_tools = trim_tools_to_budget(
+                messages=request.messages,
+                system=request.system,
+                tools=request.tools,
+                max_tokens=max_tokens,
+                keep_names=keep_names,
+                count_tokens=self._token_counter,
+            )
+            if len(kept_tools or []) != len(request.tools):
+                updates["tools"] = kept_tools
+                logger.debug(
+                    "AUTO_FIT dropped {} of {} tools to fit {} tokens",
+                    len(request.tools) - len(kept_tools or []),
+                    len(request.tools),
+                    max_tokens,
+                )
+
+        kept_messages = trim_messages_to_budget(
+            messages=request.messages,
+            system=request.system,
+            tools=kept_tools,
             max_tokens=max_tokens,
-            keep_names=keep_names,
             count_tokens=self._token_counter,
         )
-        if kept is not None and len(kept) == len(tools):
+        if len(kept_messages) != len(request.messages):
+            updates["messages"] = kept_messages
+            logger.debug(
+                "AUTO_FIT dropped {} of {} oldest messages to fit {} tokens (now ~{})",
+                len(request.messages) - len(kept_messages),
+                len(request.messages),
+                max_tokens,
+                self._token_counter(kept_messages, request.system, kept_tools),
+            )
+
+        if not updates:
             return routed
-        dropped = len(tools) - (len(kept) if kept else 0)
-        final = self._token_counter(
-            routed.request.messages, routed.request.system, kept
-        )
-        logger.debug(
-            "AUTO_FIT dropped {} of {} tools to fit {} tokens (now ~{})",
-            dropped,
-            len(tools),
-            max_tokens,
-            final,
-        )
-        new_request = routed.request.model_copy(update={"tools": kept})
+        new_request = request.model_copy(update=updates)
         return RoutedMessagesRequest(request=new_request, resolved=routed.resolved)
 
     def _cacheable_key(self, routed: RoutedMessagesRequest) -> str | None:

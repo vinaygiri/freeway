@@ -22,7 +22,7 @@ Freeway fixes all of that from **one local endpoint**:
 - ⛽ **Make free last** — quota‑aware routing + multi‑key rotation stretch free tiers and route *away* from a provider before it rate‑limits.
 - 🧠 **Smart routing** — health/latency/context‑aware model selection with automatic fallback chains and per‑message `@`‑directives.
 - 🔬 **Know what's really live** — one‑click per‑model verification pings each model for real (✓ live + latency / ✗ down + reason) and saves the result, so "ready" isn't just a guess.
-- 🩹 **Auto‑fit (the 413 fix)** — when a request exceeds a provider's token budget, Freeway trims the largest non‑essential tools until it fits, keeping the core coding tools.
+- 🩹 **Auto‑fit (the 413/400 fix)** — trims an over‑budget request (largest non‑essential tool schemas first, then the oldest conversation turns) so it can't be rejected. **Automatic by default** — sized to the model's own context, so it only touches requests that would otherwise fail. Core coding tools always kept.
 - 🔒 **Trust & glass‑box** — data‑governance rules (never send code to training providers) + a full request inspector so you can *see* every routing decision.
 - 🖥️ **Everything in a UI** — a local control center at `/admin` where every setting is editable and every feature is visible. No hand‑editing config files.
 
@@ -80,7 +80,7 @@ freeway-claude    # Claude Code, routed through Freeway
 freeway-codex     # Codex, routed through Freeway
 ```
 
-That's it — you're coding on a free model. If you ever hit a `413`, set **Routing → Auto‑fit Budget** (e.g. `9000`) or pick a higher‑limit provider on the Models page.
+That's it — you're coding on a free model. Auto‑fit keeps requests within the model's context automatically; for the smoothest experience use a **big‑context free provider** (Gemini, NVIDIA NIM) and add **multiple keys** per provider (`PROVIDER_API_KEY=k1,k2,k3`) to multiply your per‑minute budget.
 
 ---
 
@@ -110,7 +110,9 @@ Everything is configurable and observable from one loopback‑only UI served by 
 - **Favourites vs fallback.** ★ Favourite a model to shortlist it — a bookmark you can isolate with the **★ Favs** filter; it does *not* change routing. **Fallback** is real routing: **+ Fallback** adds a model to the failover chain that's tried, in order, when your primary is unavailable (toggle it off with **✓ Fallback**).
 - **Auto‑failover.** If your model's provider is down or rate‑limited, Freeway automatically tries the next model in your chain.
 - **`@`‑Directives.** Define aliases like `fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b`, then type `@big refactor this` to route that one message to Cerebras.
-- **Auto‑fit.** Set a token budget under your provider's per‑minute limit; Freeway drops the largest non‑essential tools until the request fits (core coding tools always kept).
+- **Auto‑fit.** Automatic by default (budget = 90% of the routed model's context): trims the largest non‑essential tools, then the oldest whole turns, so a request can't 413/400 — only touching requests that would exceed the model's window. Set **Routing → Auto‑fit Budget** explicitly only for tiers that cap *below* their advertised context.
+- **Bounded long sessions.** The whole conversation is resent each turn, so it grows. `freeway-claude` sizes Claude Code's compaction window to your budget/model so long sessions compact instead of overflowing. For durable free‑tier use: a **big‑context provider** (Gemini 1M, NVIDIA NIM 128k) + **multiple keys** (`PROVIDER_API_KEY=k1,k2,k3` → round‑robin, N× the per‑minute budget). **Codex** also sends ~10× smaller requests than Claude Code.
+- **Model selection.** *Use* on the Models page sets what everything routes to — you don't pick in the CLI. Freeway maps each request to the *current* default, so a change applies to the **next request automatically** (no restart). Only exception: a model you pinned via Claude Code's own `/model` overrides the default for that session.
 - **"Ready" vs "Verified".** *Ready* is provider‑level and optimistic (a healthy provider marks all its models ready). *Verified* is a real per‑model ping via **⚡ Verify all** / **Test** — ✓ live + latency or ✗ down + reason, saved until you re‑check. Actual availability is otherwise proven at request time by failover.
 
 ---
@@ -148,7 +150,7 @@ your tool ──Anthropic / OpenAI──▶  Freeway proxy (FastAPI)  ──▶ 
 
 | Symptom | Fix |
 |---|---|
-| `413 request too large` | Set **Routing → Auto‑fit Budget** (e.g. 9000), or switch to a higher‑limit provider on **Models**. |
+| `413` / `400 context_length_exceeded` | Auto‑fit handles it by default. If a tier caps below its advertised context, set **Routing → Auto‑fit Budget** explicitly (e.g. 7000), use a **big‑context provider** (Gemini/NIM), add **multiple keys** (`PROVIDER_API_KEY=k1,k2,k3`), or switch to **Codex** (~10× smaller requests). Note: 8k‑limit tiers (Groq/Cerebras free) can't fit Claude Code's ~42k baseline at all. |
 | Port already in use | Change **Providers → Runtime → PORT** (default 8082) and Apply. |
 | "no key" on a provider | Add its API key under **Providers**, Apply, then *Refresh models*. |
 | `command not found` after install | Open a fresh terminal (PATH updates apply to new shells only). |

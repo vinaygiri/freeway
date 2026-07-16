@@ -72,11 +72,11 @@ async def test_identical_cacheable_request_served_from_cache() -> None:
         Settings(), provider_getter=lambda _: provider, response_cache=cache
     )
 
-    first = await _body(handler.create(_request()))
+    first = await _body(await handler.create(_request()))
     assert provider.calls == 1
     assert "message_stop" in first
 
-    second = await _body(handler.create(_request()))
+    second = await _body(await handler.create(_request()))
     # Replayed from cache — provider not hit a second time.
     assert provider.calls == 1
     assert second == first
@@ -95,8 +95,8 @@ async def test_non_cacheable_request_bypasses_cache() -> None:
     )
 
     # No explicit temperature=0 -> not cacheable.
-    await _body(handler.create(_request(temperature=None)))
-    await _body(handler.create(_request(temperature=None)))
+    await _body(await handler.create(_request(temperature=None)))
+    await _body(await handler.create(_request(temperature=None)))
 
     assert provider.calls == 2
     assert cache.snapshot()["entries"] == 0
@@ -111,8 +111,8 @@ async def test_tool_request_bypasses_cache() -> None:
     )
     tool = Tool(name="get_weather", input_schema={"type": "object"})
 
-    await _body(handler.create(_request(tools=[tool])))
-    await _body(handler.create(_request(tools=[tool])))
+    await _body(await handler.create(_request(tools=[tool])))
+    await _body(await handler.create(_request(tools=[tool])))
 
     assert provider.calls == 2
     assert cache.snapshot()["entries"] == 0
@@ -123,8 +123,8 @@ async def test_no_cache_configured_still_works() -> None:
     provider = CountingProvider()
     handler = MessagesHandler(Settings(), provider_getter=lambda _: provider)
 
-    await _body(handler.create(_request()))
-    await _body(handler.create(_request()))
+    await _body(await handler.create(_request()))
+    await _body(await handler.create(_request()))
 
     assert provider.calls == 2
 
@@ -137,11 +137,17 @@ async def test_different_requests_cache_independently() -> None:
         Settings(), provider_getter=lambda _: provider, response_cache=cache
     )
 
-    await _body(handler.create(_request(messages=[Message(role="user", content="a")])))
-    await _body(handler.create(_request(messages=[Message(role="user", content="b")])))
+    await _body(
+        await handler.create(_request(messages=[Message(role="user", content="a")]))
+    )
+    await _body(
+        await handler.create(_request(messages=[Message(role="user", content="b")]))
+    )
     assert provider.calls == 2
     assert cache.snapshot()["entries"] == 2
 
     # Repeat the first -> served from cache.
-    await _body(handler.create(_request(messages=[Message(role="user", content="a")])))
+    await _body(
+        await handler.create(_request(messages=[Message(role="user", content="a")]))
+    )
     assert provider.calls == 2

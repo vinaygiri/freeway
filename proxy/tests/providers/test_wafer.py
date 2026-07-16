@@ -11,8 +11,8 @@ from api.models.anthropic import Message, MessagesRequest, Tool
 from config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS
 from core.anthropic.stream_contracts import parse_sse_text
 from providers.base import ProviderConfig
+from providers.exceptions import APIError
 from providers.wafer import WAFER_DEFAULT_BASE, WaferProvider
-from tests.stream_contract import assert_canonical_stream_error_envelope
 
 
 class FakeResponse:
@@ -302,6 +302,7 @@ async def test_stream_uses_post_messages_path(wafer_provider):
 
 @pytest.mark.asyncio
 async def test_stream_non_200_maps_to_anthropic_error_event(wafer_provider):
+    """A pre-content non-200 re-raises the mapped APIError (503-style tail moved up)."""
     request = MessagesRequest(
         model="GLM-5.1",
         messages=[Message(role="user", content="hi")],
@@ -316,8 +317,9 @@ async def test_stream_non_200_maps_to_anthropic_error_event(wafer_provider):
             new_callable=AsyncMock,
             return_value=response,
         ),
+        pytest.raises(APIError) as exc_info,
     ):
-        events = [
+        [
             event
             async for event in wafer_provider.stream_response(
                 request, request_id="REQ_WAFER"
@@ -325,7 +327,5 @@ async def test_stream_non_200_maps_to_anthropic_error_event(wafer_provider):
         ]
 
     assert response.is_closed
-    assert_canonical_stream_error_envelope(
-        events, user_message_substr="Provider API request failed"
-    )
-    assert "REQ_WAFER" in "".join(events)
+    assert exc_info.value.status_code == 500
+    assert "Internal Server Error" in str(exc_info.value)

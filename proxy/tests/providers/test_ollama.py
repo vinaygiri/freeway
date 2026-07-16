@@ -7,8 +7,8 @@ import pytest
 
 from core.anthropic.stream_contracts import parse_sse_text
 from providers.base import ProviderConfig
+from providers.exceptions import APIError
 from providers.ollama import OLLAMA_DEFAULT_BASE, OllamaProvider
-from tests.stream_contract import assert_canonical_stream_error_envelope
 
 
 class MockMessage:
@@ -233,7 +233,7 @@ def test_build_request_body_disabled_thinking_strips_assistant_thinking_blocks(
 
 @pytest.mark.asyncio
 async def test_stream_error_status_code(ollama_provider):
-    """Non-200 status code is yielded as an SSE API error."""
+    """A non-200 with no content committed re-raises the mapped APIError pre-content."""
     req = MockRequest()
     mock_response = MagicMock()
     mock_response.status_code = 500
@@ -254,16 +254,15 @@ async def test_stream_error_status_code(ollama_provider):
             new_callable=AsyncMock,
             return_value=mock_response,
         ),
+        pytest.raises(APIError) as exc_info,
     ):
-        events = [
+        [
             event
             async for event in ollama_provider.stream_response(req, request_id="REQ")
         ]
 
-    assert_canonical_stream_error_envelope(
-        events, user_message_substr="Provider API request failed"
-    )
-    assert "REQ" in "".join(events)
+    assert exc_info.value.status_code == 500
+    assert "Internal Server Error" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

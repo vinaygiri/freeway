@@ -284,12 +284,15 @@ class OpenAIChatStreamAdapter:
                             )
                         ).__name__,
                     )
-                    if not decision.committed and decision.has_buffered:
-                        for event in recovery.flush():
-                            yield event
-                    elif not decision.committed:
+                    if not decision.committed:
+                        # Nothing has reached the client yet (at most a buffered
+                        # message_start): discard the holdback and re-raise the mapped
+                        # error so the failover layer can try the next provider.
                         recovery.discard()
-                        ledger = self._new_ledger()
+                        raise map_error(
+                            error,
+                            rate_limiter=self._transport._global_rate_limiter,
+                        ) from error
                     for event in self._recovery.emit_error_tail(ledger, error_message):
                         yield event
                     return

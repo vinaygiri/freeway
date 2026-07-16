@@ -16,6 +16,7 @@ from core.anthropic.streaming import (
     tool_schemas_by_name,
 )
 from core.trace import provider_native_messages_body_snapshot, trace_event
+from providers.error_mapping import map_error
 from providers.transports.http import maybe_await_aclose
 
 from .recovery import AnthropicMessagesRecovery
@@ -212,23 +213,20 @@ class AnthropicMessagesStreamAdapter:
                             or decision.has_buffered
                         ),
                     )
-                    if decision.committed or decision.has_buffered:
-                        if not decision.committed:
-                            for event in recovery.flush():
-                                sent_any_event = True
-                                yield event
+                    if decision.committed:
+                        # Content already reached the client — recover gracefully
+                        # in-stream; we can no longer switch providers.
                         for event in ledger.midstream_error_tail(error_message):
                             yield event
-                    else:
-                        recovery.discard()
-                        for event in self._transport._emit_error_events(
-                            request=self._request,
-                            input_tokens=self._input_tokens,
-                            error_message=error_message,
-                            sent_any_event=False,
-                        ):
-                            yield event
-                    return
+                        return
+                    # Not committed — nothing (or only a buffered message_start) has
+                    # reached the client. Discard the holdback and re-raise the mapped
+                    # error so the failover layer can try the next provider.
+                    recovery.discard()
+                    raise map_error(
+                        error,
+                        rate_limiter=self._transport._global_rate_limiter,
+                    ) from error
                 finally:
                     if response is not None and not response.is_closed:
                         await maybe_await_aclose(response)

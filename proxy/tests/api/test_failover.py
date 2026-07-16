@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -76,12 +77,16 @@ def _getter(raising: dict[str, Exception], calls: list[str]):
 
 
 def _run(service, primary, fallbacks):
-    return service.stream_with_failover(
-        primary,
-        fallbacks,
-        wire_api="messages",
-        raw_log_label="X",
-        raw_log_payload={},
+    # stream_with_failover is async and peeks the opening chunk before returning;
+    # run it to completion so candidate resolution + circuit bookkeeping happen.
+    return asyncio.run(
+        service.stream_with_failover(
+            primary,
+            fallbacks,
+            wire_api="messages",
+            raw_log_label="X",
+            raw_log_payload={},
+        )
     )
 
 
@@ -168,6 +173,98 @@ def test_resolve_fallback_candidates_filters_invalid():
     settings.model_fallbacks = "groq/llama-3.3, cerebras/gpt-oss, bogus, notaprovider/x"
     candidates = ModelRouter(settings).resolve_fallback_candidates()
     assert [c.provider_id for c in candidates] == ["groq", "cerebras"]
+
+
+class _ChunkProvider(BaseProvider):
+    """Fake provider that yields a fixed list of SSE chunks."""
+
+    def __init__(self, chunks: list[str]) -> None:
+        self._chunks = chunks
+
+    async def cleanup(self) -> None:
+        return None
+
+    async def list_model_ids(self) -> frozenset[str]:
+        return frozenset()
+
+    async def stream_response(
+        self,
+        request: Any,
+        input_tokens: int = 0,
+        *,
+        request_id: str | None = None,
+        thinking_enabled: bool | None = None,
+    ) -> AsyncIterator[str]:
+        for chunk in self._chunks:
+            yield chunk
+
+
+_CONTENT = 'event: content_block_start\ndata: {"type":"content_block_start"}\n\n'
+
+
+def _chunk_getter(by_provider: dict[str, list[str]], calls: list[str]):
+    def getter(provider_id: str) -> BaseProvider:
+        calls.append(provider_id)
+        return _ChunkProvider(by_provider[provider_id])
+
+    return getter
+
+
+def _collect(service, primary, fallbacks) -> list[str]:
+    async def run() -> list[str]:
+        it = await service.stream_with_failover(
+            primary,
+            fallbacks,
+            wire_api="messages",
+            raw_log_label="X",
+            raw_log_payload={},
+        )
+        return [chunk async for chunk in it]
+
+    return asyncio.run(run())
+
+
+def test_peek_fails_over_on_pre_content_error():
+    calls: list[str] = []
+    breaker = CircuitBreaker()
+    err = 'event: error\ndata: {"type":"error","error":{"type":"rate_limit_error","message":"429"}}\n\n'
+    service = _service(
+        _chunk_getter({"groq": [err], "cerebras": [_CONTENT, "data: hi\n\n"]}, calls),
+        RoutingPolicy(circuit_breaker=breaker),
+    )
+    out = _collect(service, _routed("groq"), [_fallback("cerebras")])
+    assert calls == ["groq", "cerebras"]  # groq's connect error triggered failover
+    assert _CONTENT in out  # served content came from cerebras
+    assert breaker.snapshot()["groq/m"]["consecutive_failures"] == 1
+
+
+def test_peek_commits_on_content_without_touching_fallback():
+    calls: list[str] = []
+    service = _service(
+        _chunk_getter(
+            {"groq": [_CONTENT, "data: hi\n\n"], "cerebras": [_CONTENT]}, calls
+        ),
+        RoutingPolicy(),
+    )
+    out = _collect(service, _routed("groq"), [_fallback("cerebras")])
+    assert calls == ["groq"]  # committed on groq, fallback never resolved
+    assert out == [_CONTENT, "data: hi\n\n"]
+
+
+def test_peek_auth_error_blocks_remaining_models_of_provider():
+    calls: list[str] = []
+    auth = 'event: error\ndata: {"type":"error","error":{"type":"authentication_error","message":"bad key"}}\n\n'
+    service = _service(
+        _chunk_getter({"groq": [auth], "cerebras": [_CONTENT]}, calls),
+        RoutingPolicy(),
+    )
+    out = _collect(
+        service,
+        _routed("groq", "m1"),
+        [_fallback("groq", "m2"), _fallback("cerebras", "m3")],
+    )
+    assert calls == ["groq", "cerebras"]  # groq/m2 skipped after auth error
+    assert _CONTENT in out
 
 
 def test_admin_router_endpoint_reports_circuits():

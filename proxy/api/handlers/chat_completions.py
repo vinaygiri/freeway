@@ -65,7 +65,7 @@ class ChatCompletionsHandler:
             require_non_empty_messages(chat_request.messages)
             routed = self._model_router.resolve_messages_request(chat_request)
 
-            streamed = self._provider_execution.stream_with_failover(
+            streamed = await self._provider_execution.stream_with_failover(
                 routed,
                 self._model_router.resolve_fallback_candidates(),
                 wire_api="chat_completions",

@@ -80,7 +80,7 @@ class MessagesHandler:
             self._intercept_local_optimization,
         )
 
-    def create(self, request_data: MessagesRequest) -> object:
+    async def create(self, request_data: MessagesRequest) -> object:
         """Create an Anthropic-compatible message response."""
         try:
             require_non_empty_messages(request_data.messages)
@@ -103,7 +103,7 @@ class MessagesHandler:
                     return anthropic_sse_streaming_response(replay(cached))
 
             logger.debug("No optimization matched, routing to provider")
-            stream = self._provider_execution.stream_with_failover(
+            stream = await self._provider_execution.stream_with_failover(
                 routed,
                 self._model_router.resolve_fallback_candidates(),
                 wire_api="messages",

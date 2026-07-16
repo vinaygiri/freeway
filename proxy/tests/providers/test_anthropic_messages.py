@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS
-from core.anthropic.stream_contracts import event_index, parse_sse_text
+from core.anthropic.stream_contracts import parse_sse_text
 from core.anthropic.streaming import (
     MIDSTREAM_RECOVERY_ATTEMPTS,
     AnthropicStreamLedger,
@@ -15,9 +15,9 @@ from core.anthropic.streaming import (
     format_sse_event,
 )
 from providers.base import ProviderConfig
+from providers.exceptions import APIError
 from providers.transports.anthropic_messages import AnthropicMessagesTransport
 from providers.transports.anthropic_messages.recovery import AnthropicMessagesRecovery
-from tests.stream_contract import assert_canonical_stream_error_envelope
 
 
 class NativeProvider(AnthropicMessagesTransport):
@@ -230,6 +230,7 @@ async def test_stream_uses_retry_builds_request_and_closes_response(
 async def test_stream_maps_non_200_to_error_event_and_closes_response(
     provider_config,
 ):
+    """A pre-content non-200 re-raises the mapped APIError and still closes the response."""
     provider = NativeProvider(provider_config)
     req = MockRequest()
     response = FakeResponse(status_code=500, text="Internal Server Error")
@@ -242,18 +243,13 @@ async def test_stream_maps_non_200_to_error_event_and_closes_response(
             new_callable=AsyncMock,
             return_value=response,
         ),
+        pytest.raises(APIError) as exc_info,
     ):
-        events = [
-            event async for event in provider.stream_response(req, request_id="REQ_123")
-        ]
+        [event async for event in provider.stream_response(req, request_id="REQ_123")]
 
     assert response.is_closed
-    assert_canonical_stream_error_envelope(
-        events, user_message_substr="Upstream provider TEST_NATIVE returned HTTP 500."
-    )
-    blob = "".join(events)
-    assert "Internal Server Error" in blob
-    assert "REQ_123" in blob
+    assert exc_info.value.status_code == 500
+    assert "Internal Server Error" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -301,17 +297,13 @@ async def test_midstream_error_closes_open_block_and_uses_fresh_content_index(
             new_callable=AsyncMock,
             return_value=response,
         ),
+        pytest.raises(RuntimeError) as exc_info,
     ):
-        events = [e async for e in provider.stream_response(req)]
+        [e async for e in provider.stream_response(req)]
 
-    assert_canonical_stream_error_envelope(
-        events, user_message_substr="mid-stream failure"
-    )
-    parsed = parse_sse_text("".join(events))
-    starts = [e for e in parsed if e.event == "content_block_start"]
-    assert event_index(starts[0]) == 0
-    assert event_index(starts[-1]) == 1
-    assert {event_index(e) for e in parsed if e.event == "content_block_stop"} == {0, 1}
+    # Only a buffered message_start + empty content_block_start reached holdback
+    # (nothing committed), so the failure re-raises for the failover layer.
+    assert "mid-stream failure" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

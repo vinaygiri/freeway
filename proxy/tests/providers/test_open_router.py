@@ -362,6 +362,9 @@ async def test_stream_response_suppresses_native_thinking_when_disabled(
             "event: content_block_stop",
             'data: {"type":"content_block_stop","index":1}',
             "",
+            "event: message_stop",
+            'data: {"type":"message_stop"}',
+            "",
         ]
     )
 
@@ -462,6 +465,9 @@ async def test_stream_response_drops_redacted_thinking_when_disabled(
             "",
             "event: content_block_stop",
             'data: {"type":"content_block_stop","index":1}',
+            "",
+            "event: message_stop",
+            'data: {"type":"message_stop"}',
             "",
         ]
     )
@@ -603,6 +609,7 @@ async def test_stream_response_reopened_tool_use_preserves_tool_identity(
         },
         {"type": "content_block_stop", "index": 1},
         {"type": "content_block_stop", "index": 0},
+        {"type": "message_stop"},
     ):
         event_name = payload["type"]
         lines.extend((f"event: {event_name}", f"data: {json.dumps(payload)}", ""))
@@ -658,6 +665,9 @@ async def test_stream_response_closes_overlapping_thinking_before_text(
             "event: content_block_stop",
             'data: {"type":"content_block_stop","index":0}',
             "",
+            "event: message_stop",
+            'data: {"type":"message_stop"}',
+            "",
         ]
     )
 
@@ -682,6 +692,7 @@ async def test_stream_response_closes_overlapping_thinking_before_text(
 
 @pytest.mark.asyncio
 async def test_stream_response_error_path(open_router_provider):
+    """A pre-content upstream failure re-raises so the failover layer can retry."""
     req = MockRequest()
 
     with (
@@ -692,10 +703,8 @@ async def test_stream_response_error_path(open_router_provider):
             new_callable=AsyncMock,
             side_effect=RuntimeError("API failed"),
         ),
+        pytest.raises(RuntimeError) as exc_info,
     ):
-        events = [e async for e in open_router_provider.stream_response(req)]
+        [e async for e in open_router_provider.stream_response(req)]
 
-    event_text = "".join(events)
-    assert "message_start" in event_text
-    assert "API failed" in event_text
-    assert "message_stop" in event_text
+    assert "API failed" in str(exc_info.value)

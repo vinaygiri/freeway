@@ -163,8 +163,12 @@ async def test_stream_uses_post_messages_path(fireworks_provider):
         mock_resp.raise_for_status = lambda: None
 
         async def aiter():
-            if False:  # pragma: no cover
-                yield ""
+            yield "event: message_start"
+            yield 'data: {"type":"message_start","message":{}}'
+            yield ""
+            yield "event: message_stop"
+            yield 'data: {"type":"message_stop"}'
+            yield ""
 
         mock_resp.aiter_lines = aiter
         mock_resp.aclose = AsyncMock()

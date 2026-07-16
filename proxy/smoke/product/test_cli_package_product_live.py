@@ -27,7 +27,7 @@ def test_entrypoint_init_e2e(smoke_config: SmokeConfig, tmp_path: Path) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr or result.stdout
-    env_file = tmp_path / ".fcc" / ".env"
+    env_file = tmp_path / ".freeway" / ".env"
     assert env_file.is_file()
     assert env_file.read_text(encoding="utf-8").strip()
 

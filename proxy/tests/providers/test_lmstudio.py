@@ -8,8 +8,8 @@ import pytest
 from config.constants import ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS
 from core.anthropic.stream_contracts import parse_sse_text
 from providers.base import ProviderConfig
+from providers.exceptions import APIError
 from providers.lmstudio import LMStudioProvider
-from tests.stream_contract import assert_canonical_stream_error_envelope
 
 
 class MockMessage:
@@ -125,11 +125,15 @@ async def test_stream_response_omits_thinking_when_globally_disabled(lmstudio_co
     mock_response = MagicMock()
     mock_response.status_code = 200
 
-    async def empty_aiter():
-        if False:
-            yield ""
+    async def terminal_aiter():
+        yield "event: message_start"
+        yield 'data: {"type":"message_start","message":{}}'
+        yield ""
+        yield "event: message_stop"
+        yield 'data: {"type":"message_stop"}'
+        yield ""
 
-    mock_response.aiter_lines = empty_aiter
+    mock_response.aiter_lines = terminal_aiter
 
     with (
         patch.object(provider._client, "build_request") as mock_build,
@@ -156,11 +160,15 @@ async def test_stream_response_omits_thinking_when_request_disables_it(
     mock_response = MagicMock()
     mock_response.status_code = 200
 
-    async def empty_aiter():
-        if False:
-            yield ""
+    async def terminal_aiter():
+        yield "event: message_start"
+        yield 'data: {"type":"message_start","message":{}}'
+        yield ""
+        yield "event: message_stop"
+        yield 'data: {"type":"message_stop"}'
+        yield ""
 
-    mock_response.aiter_lines = empty_aiter
+    mock_response.aiter_lines = terminal_aiter
 
     with (
         patch.object(lmstudio_provider._client, "build_request") as mock_build,
@@ -239,11 +247,15 @@ async def test_stream_response_adds_max_tokens_if_missing(lmstudio_provider):
     mock_response = MagicMock()
     mock_response.status_code = 200
 
-    async def empty_aiter():
-        if False:
-            yield ""
+    async def terminal_aiter():
+        yield "event: message_start"
+        yield 'data: {"type":"message_start","message":{}}'
+        yield ""
+        yield "event: message_stop"
+        yield 'data: {"type":"message_stop"}'
+        yield ""
 
-    mock_response.aiter_lines = empty_aiter
+    mock_response.aiter_lines = terminal_aiter
 
     with (
         patch.object(req, "model_dump", return_value={"model": "test"}),
@@ -264,7 +276,7 @@ async def test_stream_response_adds_max_tokens_if_missing(lmstudio_provider):
 
 @pytest.mark.asyncio
 async def test_stream_error_status_code(lmstudio_provider):
-    """Non-200 status code raises an error that gets caught and yielded as an SSE API error."""
+    """A non-200 with no content committed re-raises the mapped APIError pre-content."""
     req = MockRequest()
 
     mock_response = MagicMock()
@@ -286,21 +298,17 @@ async def test_stream_error_status_code(lmstudio_provider):
             new_callable=AsyncMock,
             return_value=mock_response,
         ),
+        pytest.raises(APIError) as exc_info,
     ):
-        events = [
-            e
-            async for e in lmstudio_provider.stream_response(req, request_id="TEST_ID")
-        ]
+        [e async for e in lmstudio_provider.stream_response(req, request_id="TEST_ID")]
 
-        assert_canonical_stream_error_envelope(
-            events, user_message_substr="Provider API request failed"
-        )
-        assert "TEST_ID" in "".join(events)
+    assert exc_info.value.status_code == 500
+    assert "Internal Server Error" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
 async def test_stream_network_error(lmstudio_provider):
-    """Network errors are caught and yielded as SSE API error events."""
+    """Network errors with no content committed re-raise pre-content for failover."""
     req = MockRequest()
 
     with (
@@ -313,21 +321,16 @@ async def test_stream_network_error(lmstudio_provider):
             new_callable=AsyncMock,
             side_effect=httpx.ConnectError("Connection refused"),
         ),
+        pytest.raises(httpx.ConnectError) as exc_info,
     ):
-        events = [
-            e
-            async for e in lmstudio_provider.stream_response(req, request_id="TEST_ID2")
-        ]
+        [e async for e in lmstudio_provider.stream_response(req, request_id="TEST_ID2")]
 
-        blob = "".join(events)
-        assert_canonical_stream_error_envelope(
-            events, user_message_substr="Connection refused"
-        )
-        assert "TEST_ID2" in blob
+    assert "Connection refused" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
 async def test_stream_error_405_mentions_upstream_provider(lmstudio_provider):
+    """A pre-content 405 re-raises the mapped APIError carrying the 405 status."""
     req = MockRequest()
 
     mock_response = MagicMock()
@@ -349,17 +352,12 @@ async def test_stream_error_405_mentions_upstream_provider(lmstudio_provider):
             new_callable=AsyncMock,
             return_value=mock_response,
         ),
+        pytest.raises(APIError) as exc_info,
     ):
-        events = [
-            e async for e in lmstudio_provider.stream_response(req, request_id="REQ405")
-        ]
+        [e async for e in lmstudio_provider.stream_response(req, request_id="REQ405")]
 
-    blob = "".join(events)
-    assert (
-        "Upstream provider LMSTUDIO rejected the request method or endpoint (HTTP 405)."
-        in blob
-    )
-    assert "REQ405" in blob
+    assert exc_info.value.status_code == 405
+    assert "Method Not Allowed" in str(exc_info.value)
 
 
 def test_build_request_body_disabled_thinking_strips_native_thinking_history(

@@ -8,6 +8,7 @@ from httpx import Request, Response
 
 from config.nim import NimSettings
 from providers.base import ProviderConfig
+from providers.exceptions import APIError
 from providers.nvidia_nim import NvidiaNimProvider
 from providers.rate_limit import GlobalRateLimiter
 from tests.providers.test_nvidia_nim import MockRequest
@@ -104,10 +105,10 @@ async def test_nim_stream_openai_5xx_exhausted_emits_user_message(
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             mock_create.side_effect = _internal_5xx(status_code)
-            events = [e async for e in provider.stream_response(req)]
+            with pytest.raises(APIError) as exc_info:
+                [e async for e in provider.stream_response(req)]
 
         assert mock_create.await_count == 5
-        blob = "".join(events)
-        assert expect_substr in blob.lower()
+        assert expect_substr in str(exc_info.value).lower()
     finally:
         GlobalRateLimiter.reset_instance()

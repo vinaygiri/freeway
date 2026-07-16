@@ -111,3 +111,23 @@ class ServiceUnavailableError(ProviderError):
 
 class ModelListResponseError(ServiceUnavailableError):
     """Raised when a provider model-list response cannot be parsed safely."""
+
+
+def should_failover(exc: BaseException) -> bool:
+    """True when trying the NEXT candidate is worthwhile.
+
+    We fail over on *every* provider error, including 400s: the most common 400 is
+    ``context_length_exceeded`` from a small-context free tier, which a larger
+    model can serve — so refusing to fail over there is exactly the "it stops"
+    bug. A truly malformed request still surfaces to the client via the held error
+    stream after the (bounded) candidate list is exhausted, so nothing is lost.
+    """
+    return True
+
+
+def blocks_provider(exc: BaseException) -> bool:
+    """True when the provider itself is unusable for the rest of this request
+    (bad/missing credential) and its circuit should open."""
+    if isinstance(exc, AuthenticationError):
+        return True
+    return getattr(exc, "status_code", None) in (401, 403)

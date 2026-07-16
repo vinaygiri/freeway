@@ -20,6 +20,8 @@ from core.anthropic.streaming import (
     make_text_recovery_body,
 )
 from providers.base import ProviderConfig
+from providers.error_mapping import extract_provider_error_detail
+from providers.exceptions import APIError, InvalidRequestError
 from providers.nvidia_nim import NvidiaNimProvider
 from providers.transports.openai_chat.recovery import OpenAIChatRecovery
 from providers.transports.openai_chat.tool_calls import (
@@ -128,52 +130,12 @@ async def _collect_stream(provider, request):
     return [e async for e in provider.stream_response(request)]
 
 
-def _assert_no_content_deltas_after_error_text(
-    events: list[str], error_substr: str
-) -> None:
-    """After the error text delta, only block close + message tail events may follow."""
-    parsed = parse_sse_text("".join(events))
-    first_error_idx = None
-    for i, ev in enumerate(parsed):
-        if ev.event != "content_block_delta":
-            continue
-        delta = ev.data.get("delta", {})
-        if delta.get("type") == "text_delta" and error_substr in str(
-            delta.get("text", "")
-        ):
-            first_error_idx = i
-            break
-    assert first_error_idx is not None, (error_substr, "".join(events))
-    for ev in parsed[first_error_idx + 1 :]:
-        assert ev.event in ("content_block_stop", "message_delta", "message_stop"), (
-            ev.event,
-            ev.data,
-        )
-
-
-def _assert_error_not_in_text_deltas_after_tool(
-    events: list[str], error_substr: str
-) -> None:
-    """Transport errors after a native tool call must not use assistant text_delta (issue #206)."""
-    blob = "".join(events)
-    for ev in parse_sse_text(blob):
-        if ev.event != "content_block_delta":
-            continue
-        delta = ev.data.get("delta", {})
-        if delta.get("type") == "text_delta" and error_substr in str(
-            delta.get("text", "")
-        ):
-            raise AssertionError(
-                f"error leaked as text_delta after tool_use: {ev.data!r} full={blob!r}"
-            )
-
-
 class TestStreamingExceptionHandling:
     """Tests for error paths during stream_response."""
 
     @pytest.mark.asyncio
     async def test_api_error_emits_sse_error_event(self):
-        """When API raises during streaming, SSE error event is emitted."""
+        """A pre-content upstream failure re-raises the mapped error for failover."""
         provider = _make_provider()
         request = _make_request()
 
@@ -193,22 +155,21 @@ class TestStreamingExceptionHandling:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(RuntimeError) as exc_info,
         ):
-            events = await _collect_stream(provider, request)
+            await _collect_stream(provider, request)
 
-        # Should have message_start, error text block, close blocks, message_delta, message_stop
-        event_text = "".join(events)
-        assert "message_start" in event_text
-        assert "API failed" in event_text
-        assert "message_stop" in event_text
-        parsed = parse_sse_text(event_text)
-        assert parsed[0].event == "message_start"
-        assert sum(event.event == "message_start" for event in parsed) == 1
-        _assert_no_content_deltas_after_error_text(events, "API failed")
+        # Nothing committed to the client yet, so the mapped error re-raises
+        # (graceful in-stream rendering now lives in the failover layer).
+        assert "API failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_read_timeout_with_empty_message_emits_fallback(self):
-        """ReadTimeout(TimeoutError()) should emit a visible, non-empty timeout message."""
+        """A pre-content ReadTimeout re-raises unmapped so the failover layer renders it.
+
+        The user-facing "timed out after ..." message and request_id are added by the
+        failover layer (api/provider_execution.py); the transport only re-raises here.
+        """
         provider = _make_provider()
         request = _make_request()
 
@@ -225,8 +186,9 @@ class TestStreamingExceptionHandling:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(httpx.ReadTimeout),
         ):
-            events = [
+            [
                 e
                 async for e in provider.stream_response(
                     request,
@@ -234,15 +196,13 @@ class TestStreamingExceptionHandling:
                 )
             ]
 
-        event_text = "".join(events)
-        assert "timed out after" in event_text
-        assert "Request ID: req_timeout123" in event_text
-        assert "message_stop" in event_text
-        _assert_no_content_deltas_after_error_text(events, "timed out after")
-
     @pytest.mark.asyncio
     async def test_error_after_partial_content(self):
-        """Error after partial content: blocks closed, error emitted."""
+        """A single held-back (uncommitted) chunk then an error still re-raises.
+
+        The lone "Hello " delta stays in the recovery holdback and never reaches the
+        client, so nothing is committed and the mapped error re-raises for failover.
+        """
         provider = _make_provider()
         request = _make_request()
 
@@ -262,18 +222,19 @@ class TestStreamingExceptionHandling:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(RuntimeError) as exc_info,
         ):
-            events = await _collect_stream(provider, request)
+            await _collect_stream(provider, request)
 
-        event_text = "".join(events)
-        assert "Hello" in event_text
-        assert "Connection lost" in event_text
-        assert "message_stop" in event_text
-        _assert_no_content_deltas_after_error_text(events, "Connection lost")
+        assert "Connection lost" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_error_after_native_tool_call_uses_top_level_error_event(self):
-        """After a streamed tool_call, do not append error text as a new assistant text block."""
+        """A single incomplete tool_call chunk is uncommitted; the error re-raises.
+
+        The tool block never flushes to the client (held back), so nothing is
+        committed and the mapped error re-raises for failover.
+        """
         provider = _make_provider()
         request = _make_request()
         tool_chunk = _make_tool_calls_chunk(
@@ -295,16 +256,10 @@ class TestStreamingExceptionHandling:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(RuntimeError) as exc_info,
         ):
-            events = await _collect_stream(provider, request)
-        event_text = "".join(events)
-        assert "tool_use" in event_text
-        assert "Connection lost after tool" in event_text
-        assert "event: error\n" in event_text
-        assert "message_stop" in event_text
-        _assert_error_not_in_text_deltas_after_tool(
-            events, "Connection lost after tool"
-        )
+            await _collect_stream(provider, request)
+        assert "Connection lost after tool" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_empty_response_gets_space(self):
@@ -519,13 +474,16 @@ class TestStreamingExceptionHandling:
             response=response,
         )
 
-        with patch.object(
-            provider._client.chat.completions,
-            "create",
-            new_callable=AsyncMock,
-            side_effect=error,
+        with (
+            patch.object(
+                provider._client.chat.completions,
+                "create",
+                new_callable=AsyncMock,
+                side_effect=error,
+            ),
+            pytest.raises(APIError) as exc_info,
         ):
-            events = [
+            [
                 e
                 async for e in provider.stream_response(
                     request,
@@ -533,16 +491,10 @@ class TestStreamingExceptionHandling:
                 )
             ]
 
-        event_text = "".join(events)
-        assert (
-            "Upstream provider NIM rejected the request method or endpoint (HTTP 405)."
-            in event_text
-        )
-        assert "Request ID: REQ405" in event_text
-        _assert_no_content_deltas_after_error_text(
-            events,
-            "Upstream provider NIM rejected the request method or endpoint (HTTP 405).",
-        )
+        # The 405 status is preserved on the mapped error; the "Upstream provider NIM
+        # rejected ... (HTTP 405)" framing and request_id are rendered by the failover
+        # layer, not by the transport, which now re-raises pre-content.
+        assert exc_info.value.status_code == 405
 
     @pytest.mark.asyncio
     async def test_stream_with_openai_bad_request_surfaces_upstream_body(self):
@@ -561,13 +513,16 @@ class TestStreamingExceptionHandling:
         }
         error = openai.BadRequestError("Bad Request", response=response, body=body)
 
-        with patch.object(
-            provider._client.chat.completions,
-            "create",
-            new_callable=AsyncMock,
-            side_effect=error,
+        with (
+            patch.object(
+                provider._client.chat.completions,
+                "create",
+                new_callable=AsyncMock,
+                side_effect=error,
+            ),
+            pytest.raises(InvalidRequestError) as exc_info,
         ):
-            events = [
+            [
                 e
                 async for e in provider.stream_response(
                     request,
@@ -575,24 +530,16 @@ class TestStreamingExceptionHandling:
                 )
             ]
 
-        event_text = "".join(events)
-        message_text = "".join(
-            str(ev.data.get("delta", {}).get("text", ""))
-            for ev in parse_sse_text(event_text)
-            if ev.event == "content_block_delta"
-            and ev.data.get("delta", {}).get("type") == "text_delta"
-        )
-        assert "Upstream provider NIM returned HTTP 400." in event_text
-        assert "Category: BadRequest" in event_text
-        assert "Thinking mode does not support this tool_choice" in event_text
+        # The mapped error re-raises pre-content; the upstream body is still carried on
+        # the chained cause so the failover layer can surface it verbatim to the user.
+        cause = exc_info.value.__cause__
+        assert isinstance(cause, Exception)
+        detail = extract_provider_error_detail(cause)
+        assert detail.status_code == 400
+        assert detail.error_type_hint == "BadRequest"
         assert (
-            '{"error":{"type":"BadRequest","message":"Thinking mode does not support this tool_choice"}}'
-            in message_text
-        )
-        assert "Request ID: REQ_BODY" in event_text
-        _assert_no_content_deltas_after_error_text(
-            events,
-            "Upstream provider NIM returned HTTP 400.",
+            detail.body_text
+            == '{"error":{"type":"BadRequest","message":"Thinking mode does not support this tool_choice"}}'
         )
 
     @pytest.mark.asyncio
@@ -611,13 +558,16 @@ class TestStreamingExceptionHandling:
         error = openai.BadRequestError("Bad Request", response=response, body=body)
         stream_mock = AsyncStreamMock([tool_chunk], error=error)
 
-        with patch.object(
-            provider._client.chat.completions,
-            "create",
-            new_callable=AsyncMock,
-            return_value=stream_mock,
+        with (
+            patch.object(
+                provider._client.chat.completions,
+                "create",
+                new_callable=AsyncMock,
+                return_value=stream_mock,
+            ),
+            pytest.raises(InvalidRequestError) as exc_info,
         ):
-            events = [
+            [
                 e
                 async for e in provider.stream_response(
                     request,
@@ -625,12 +575,12 @@ class TestStreamingExceptionHandling:
                 )
             ]
 
-        event_text = "".join(events)
-        assert "tool_use" in event_text
-        assert "event: error\n" in event_text
-        assert "bad after tool" in event_text
-        assert "Request ID: REQ_TOOL_BODY" in event_text
-        _assert_error_not_in_text_deltas_after_tool(events, "bad after tool")
+        # The single incomplete tool chunk is uncommitted, so the mapped error re-raises;
+        # the upstream body remains on the chained cause for the failover layer.
+        cause = exc_info.value.__cause__
+        assert isinstance(cause, Exception)
+        detail = extract_provider_error_detail(cause)
+        assert "bad after tool" in (detail.body_text or "")
 
     @pytest.mark.asyncio
     async def test_clean_eof_after_complete_tool_call_salvages_tool_use(self):
@@ -907,16 +857,20 @@ class TestStreamingExceptionHandling:
             error=ValueError("provider stream failed"),
         )
 
-        with patch.object(
-            provider._client.chat.completions,
-            "create",
-            new_callable=AsyncMock,
-            return_value=stream,
+        with (
+            patch.object(
+                provider._client.chat.completions,
+                "create",
+                new_callable=AsyncMock,
+                return_value=stream,
+            ),
+            pytest.raises(ValueError) as exc_info,
         ):
-            events = await _collect_stream(provider, request)
+            await _collect_stream(provider, request)
 
+        # Cleanup still runs in the finally block even though the generator now raises.
         assert stream.closed is True
-        assert "provider stream failed" in "".join(events).lower()
+        assert "provider stream failed" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_truncated_recovery_stream_falls_back_to_error_tail(self):
@@ -1329,7 +1283,7 @@ class TestStreamChunkEdgeCases:
 
     @pytest.mark.asyncio
     async def test_stream_generator_cleanup_on_exception(self):
-        """When stream raises mid-iteration, message_stop still emitted."""
+        """A held-back chunk then an error re-raises pre-content (nothing committed)."""
         provider = _make_provider()
         request = _make_request()
 
@@ -1351,14 +1305,11 @@ class TestStreamChunkEdgeCases:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(ConnectionResetError) as exc_info,
         ):
-            events = await _collect_stream(provider, request)
+            await _collect_stream(provider, request)
 
-        event_text = "".join(events)
-        assert "Partial" in event_text
-        assert "Connection reset" in event_text
-        assert "message_stop" in event_text
-        _assert_no_content_deltas_after_error_text(events, "Connection reset")
+        assert "Connection reset" in str(exc_info.value)
 
     def test_stream_malformed_tool_args_chunked(self):
         """Chunked tool args that never form valid JSON are flushed with {}."""
@@ -1398,7 +1349,9 @@ async def test_openai_compat_stream_ends_with_contract_when_tool_name_never_arri
         id="call_inc",
         function=SimpleNamespace(name=None, arguments="{}"),
     )
-    stream_mock = AsyncStreamMock([_make_chunk(tool_calls=[tc0])])
+    stream_mock = AsyncStreamMock(
+        [_make_chunk(tool_calls=[tc0]), _make_chunk(finish_reason="stop")]
+    )
     with (
         patch.object(
             provider._client.chat.completions,

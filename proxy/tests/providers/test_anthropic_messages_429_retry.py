@@ -6,15 +6,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
+from core.anthropic.errors import get_user_facing_error_message
 from core.anthropic.stream_contracts import event_names, parse_sse_text
 from providers.base import ProviderConfig
+from providers.exceptions import InvalidRequestError, ProviderError
 from providers.rate_limit import GlobalRateLimiter
 from tests.providers.test_anthropic_messages import (
     FakeResponse,
     MockRequest,
     NativeProvider,
 )
-from tests.stream_contract import assert_canonical_stream_error_envelope
 
 
 def _assert_minimal_success_stream(events: list[str]) -> None:
@@ -189,15 +190,13 @@ async def test_native_stream_5xx_retry_exhausted(provider_config, status_code, s
                     return_value=bad,
                 ) as mock_send,
                 patch("asyncio.sleep", new_callable=AsyncMock),
+                pytest.raises(ProviderError) as exc_info,
             ):
-                events = [e async for e in provider.stream_response(req)]
+                [e async for e in provider.stream_response(req)]
 
             assert mock_send.await_count == 5
             assert bad.is_closed
-            assert_canonical_stream_error_envelope(
-                events,
-                user_message_substr=substr,
-            )
+            assert substr in get_user_facing_error_message(exc_info.value)
     finally:
         GlobalRateLimiter.reset_instance()
 
@@ -237,13 +236,14 @@ async def test_non_retryable_4xx_http_error_not_retried(provider_config):
                     new_callable=AsyncMock,
                     return_value=err,
                 ) as mock_send,
+                pytest.raises(InvalidRequestError) as exc_info,
             ):
-                events = [e async for e in provider.stream_response(req)]
+                [e async for e in provider.stream_response(req)]
 
             mock_send.assert_awaited_once()
             assert err.is_closed
-            assert_canonical_stream_error_envelope(
-                events, user_message_substr="Invalid request sent to provider"
+            assert "Invalid request sent to provider" in get_user_facing_error_message(
+                exc_info.value
             )
     finally:
         GlobalRateLimiter.reset_instance()

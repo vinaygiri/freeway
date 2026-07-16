@@ -121,7 +121,7 @@ async def test_handler_strips_dropped_tools_before_provider() -> None:
         ],
     )
 
-    await _drain(handler.create(request))
+    await _drain(await handler.create(request))
 
     forwarded = provider.received[0].tools
     assert [t.name for t in forwarded] == ["Bash", "Read"]
@@ -138,7 +138,7 @@ async def test_handler_keeps_all_tools_when_drop_unset() -> None:
         tools=[_tool("Workflow"), _tool("Bash")],
     )
 
-    await _drain(handler.create(request))
+    await _drain(await handler.create(request))
 
     assert [t.name for t in provider.received[0].tools] == ["Workflow", "Bash"]
 

@@ -43,6 +43,7 @@ class ResponsesStreamAssembler:
         )
         self._started = False
         self.terminal = False
+        self._stop_reason: str | None = None
         self.final_response: dict[str, Any] | None = None
 
     def process_anthropic_event(self, event: AnthropicSseEvent) -> list[str]:
@@ -58,6 +59,7 @@ class ResponsesStreamAssembler:
             chunks.extend(self._handle_content_block_stop(event.data))
         elif event.event == "message_delta":
             self._ledger.record_usage_delta(event.data)
+            self._capture_stop_reason(event.data)
         elif event.event == "message_stop":
             chunks.extend(self.complete_response())
         elif event.event == "error":
@@ -71,8 +73,21 @@ class ResponsesStreamAssembler:
         chunks.extend(self.complete_response())
         return chunks
 
+    def _capture_stop_reason(self, data: Mapping[str, Any]) -> None:
+        """Remember the Anthropic ``stop_reason`` from a message_delta so a truncated
+        response (``max_tokens``) can be reported as ``incomplete`` at message_stop."""
+        delta = data.get("delta")
+        if isinstance(delta, dict):
+            reason = delta.get("stop_reason")
+            if isinstance(reason, str):
+                self._stop_reason = reason
+
     def response_payload(
-        self, *, status: str, error: dict[str, Any] | None = None
+        self,
+        *,
+        status: str,
+        error: dict[str, Any] | None = None,
+        incomplete_details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
             "id": self._response_id,
@@ -87,6 +102,7 @@ class ResponsesStreamAssembler:
             "top_p": self._request.get("top_p"),
             "max_output_tokens": self._request.get("max_output_tokens"),
             "usage": self._ledger.usage(),
+            "incomplete_details": incomplete_details,
             "error": error,
         }
 
@@ -94,8 +110,18 @@ class ResponsesStreamAssembler:
         chunks = self._flush_active_blocks()
         if self.terminal:
             return chunks
-        self.final_response = self.response_payload(status="completed")
-        chunks.append(events.response_completed(self.final_response))
+        if self._stop_reason == "max_tokens":
+            # The model was cut off by the output-token limit. Report the OpenAI
+            # ``incomplete`` status so the client (e.g. Codex) knows the turn was
+            # truncated — not a clean finish it should silently stop on.
+            self.final_response = self.response_payload(
+                status="incomplete",
+                incomplete_details={"reason": "max_output_tokens"},
+            )
+            chunks.append(events.response_incomplete(self.final_response))
+        else:
+            self.final_response = self.response_payload(status="completed")
+            chunks.append(events.response_completed(self.final_response))
         self.terminal = True
         return chunks
 

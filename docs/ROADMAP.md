@@ -96,8 +96,8 @@ candidates) — safe; mid-stream failover needs transport surgery (M4b).
 - [x] Circuit breaker owned by `AppRuntime`; admin `GET /admin/api/router` (fallbacks + circuit snapshot)
 - [x] 19 new tests; full suite **1775 passed / 8 skipped** (only no-git fail); ruff+ty+ban clean
 
-### M4b — Mid-stream cross-provider failover *(risky; deferred)*
-- [ ] Thread a failure signal out of `RecoveryController` at the uncommitted-holdback seam
+### M4b — Mid-stream cross-provider failover *(shipped)* ✅
+- [x] Thread a failure signal out of `RecoveryController` at the uncommitted-holdback seam
 
 ### M4c — Multi-key pooling / rotation *(net-new; not in FCM daemon)* ✅
 - [x] Comma-separated keys per provider (existing key env var) → `ProviderConfig.api_keys`
@@ -119,16 +119,16 @@ candidates) — safe; mid-stream failover needs transport surgery (M4b).
 - [x] 9 new tests. **Caveat:** only OpenRouter exposes context size today, so the
   guard is a no-op elsewhere until more per-model metadata is added (vision/tools deferred)
 
-### M4b — Mid-stream cross-provider failover *(DEFERRED — high risk)*
-Investigated; a provably-safe seam exists but shipping is HIGH-risk with broad
-blast radius. Deferred by decision. **Captured design for a future attempt:**
+### M4b — Mid-stream cross-provider failover *(shipped)* ✅
+Implemented and live-verified. The provably-safe seam is in place and failover
+now hands off across providers on the uncommitted path. **Design as built:**
 - **Safe seam:** the `not committed` path only. Recovery holds back all output
   for 0.75s / 64KB (`core/anthropic/streaming/recovery.py`, `RecoveryHoldbackBuffer`);
   **no bytes (not even `message_start`) reach the client before commit** — locked
   by `test_precommit_openai_holdback_retries_without_leaking_partial`. The
   `EARLY_RETRY` branch is entered only when `not committed`, so failing over there
   cannot double-emit / corrupt.
-- **Work required:** (1) new `CrossProviderFailover` exception raised **only** on
+- **What shipped:** (1) pre-content errors raised **only** on
   the uncommitted path in both `providers/transports/{openai_chat,anthropic_messages}/stream.py`
   (instead of same-provider `continue` / error-SSE-emit); (2) new `RecoveryController`
   action/policy to signal hand-off; (3) convert `ProviderExecutionService.stream_with_failover`
@@ -139,7 +139,7 @@ blast radius. Deferred by decision. **Captured design for a future attempt:**
   (a fast provider that commits then fails would make provider B emit a 2nd
   `message_start` → unrecoverable stream corruption). Every trigger MUST hard-gate
   on `recovery.committed is False`.
-- **Why deferrable:** M4a already fails over on pre-flight failures (auth/down/
+- **Scope vs M4a:** M4a already fails over on pre-flight failures (auth/down/
   bad-config/circuit-open/quota-avoid) + same-provider early-retry handles transient
   blips; M4b only adds the narrow after-connect-before-first-byte window.
 
@@ -285,7 +285,7 @@ editor + Tauri shell) is a multi-slice epic.
   for the new providers (unknown = conservative today).
 ### M8c — packaging (Docker + single installer) ✅
 - [x] `proxy/Dockerfile` — two-stage uv build on `python:3.14.0-slim` (pinned to
-  `.python-version`), non-root `freeway` user with writable `~` for `~/.fcc`, `/health`
+  `.python-version`), non-root `freeway` user with writable `~` for `~/.freeway`, `/health`
   HEALTHCHECK, runtime deps only (no voice/torch). `proxy/.dockerignore`.
   **Built + ran + verified: `GET /health` → 200 `{"status":"healthy"}`, Docker health=healthy.**
 - [x] `docker-compose.yml` (top level) — two-process stack: proxy (8082) + frontend (19280),

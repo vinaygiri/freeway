@@ -15,19 +15,17 @@ def _script_text(name: str) -> str:
     return (_repo_root() / "scripts" / name).read_text(encoding="utf-8")
 
 
-def test_readme_uninstall_one_liners_use_raw_github_urls() -> None:
+def test_readme_documents_local_uninstall() -> None:
+    """Freeway installs/uninstalls locally (no remote installer), so the README must
+    document the local uninstall scripts and the manual ``uv tool uninstall`` path —
+    not a remote curl|iex one-liner pointing at an upstream repo."""
     text = (_repo_root() / "README.md").read_text(encoding="utf-8")
 
-    assert (
-        'curl -fsSL "https://raw.githubusercontent.com/'
-        'Alishahryar1/free-claude-code/main/scripts/uninstall.sh" | sh'
-    ) in text
-    assert (
-        'irm "https://raw.githubusercontent.com/'
-        'Alishahryar1/free-claude-code/main/scripts/uninstall.ps1" | iex'
-    ) in text
-    assert "blob/main/scripts/uninstall.sh?raw=1" not in text
-    assert "blob/main/scripts/uninstall.ps1?raw=1" not in text
+    assert "./scripts/uninstall.sh" in text
+    assert ".\\scripts\\uninstall.ps1" in text
+    assert "uv tool uninstall freeway-ai" in text
+    # Must not resurrect the pre-rebrand upstream remote-install URLs.
+    assert "raw.githubusercontent.com/Alishahryar1/free-claude-code" not in text
 
 
 def _braced_body(text: str, declaration: str) -> str:

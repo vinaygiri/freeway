@@ -23,7 +23,7 @@ Groq, Gemini free tier, OpenRouter free models, trial credits, local models).
 | P7 | 190k conversation routed to a 32k model → hard failure | no context guard | no context guard |
 | P8 | When something breaks, no way to see *why* (model? truncation? tool-parse? rate limit?) or replay it | traces exist, not user-facing | none |
 | P9 | Silent quality cliff — you don't know your agent just dropped to a weak model | no signal | no signal |
-| P10 | Key/config sprawl across ~20 providers and many tool config files | managed `~/.fcc` | `~/.free-coding-models.json` |
+| P10 | Key/config sprawl across 26 providers and many tool config files | managed `~/.freeway` | `~/.free-coding-models.json` |
 
 **Punchline:** "free" is only useful if it's *reliable, trustworthy, and
 stretches as far as possible*. Both tools stop at "route to something that's

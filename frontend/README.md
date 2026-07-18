@@ -1,3 +1,9 @@
+> **Part of [Freeway](../README.md).** This is Freeway's optional web dashboard and
+> model-catalog control plane (runs locally on port 19280). It is bundled as-is from
+> the upstream `free-coding-models` project, and the sections below are its original
+> documentation. For the Freeway product overview, install, and the proxy, see the
+> [top-level README](../README.md).
+
 <p align="center">
   <img src="logo.webp" alt="free-coding-models logo" width="328">
 </p>
@@ -599,11 +605,16 @@ For every model in this tool, **you own the generated output** — code, text, o
 
 ## 📊 Telemetry
 
+> **Freeway bundle:** telemetry and auto-update are **removed** from the Freeway
+> build — nothing is collected and no update checks are made. This is intentional
+> (see [`docs/PACKAGING.md`](../docs/PACKAGING.md), "Not included (by design)").
+> The description below documents the upstream `free-coding-models` behavior.
+
 `free-coding-models` collects anonymous usage telemetry to help understand how the CLI is used and improve the product. No personal information, API keys, prompts, source code, file paths, or secrets are ever collected.
 
 The telemetry payload is limited to anonymous product analytics such as the app version, selected tool mode, operating system, terminal family, and a random anonymous install ID stored locally on your machine. When a model is launched, telemetry can also include the selected tool, provider, model ID, model label, model tier, launch result, and a few product actions such as installing provider catalogs, saving/removing API keys, or toggling shell environment export.
 
-Telemetry is enabled by default and can be disabled with any of the following:
+In upstream `free-coding-models`, telemetry is enabled by default and can be disabled with any of the following (in the Freeway bundle it is already removed):
 
 | Method | How |
 |--------|-----|

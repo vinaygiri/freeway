@@ -4,7 +4,7 @@
 
 ### A free, smart route to many AI coding models.
 
-**Freeway is a local gateway that lets [Claude Code](https://claude.com/claude-code), Codex, and any OpenAI‑compatible coding tool run on ~20 free / free‑tier model providers** — routing each request to the fastest healthy model that still has quota, automatically failing over, and trimming oversized requests so "free" actually lasts.
+**Freeway is a local gateway that lets [Claude Code](https://claude.com/claude-code), Codex, and any OpenAI‑compatible coding tool run on 26 model providers** (free‑tier cloud + local) — routing each request to the fastest healthy model that still has quota, automatically failing over, and trimming oversized requests so "free" actually lasts.
 
 `brand: Freeway` · `command: freeway` · `package: freeway-ai` · MIT licensed
 
@@ -18,7 +18,7 @@ Free AI model tiers are generous but fiddly: every provider speaks a slightly di
 
 Freeway fixes all of that from **one local endpoint**:
 
-- 🔌 **One endpoint, every tool** — accepts Claude Code's Anthropic protocol *and* Codex's / OpenAI's, and speaks to ~20 providers behind the scenes.
+- 🔌 **One endpoint, every tool** — accepts Claude Code's Anthropic protocol *and* Codex's / OpenAI's, and speaks to 26 providers behind the scenes.
 - ⛽ **Make free last** — quota‑aware routing + multi‑key rotation stretch free tiers and route *away* from a provider before it rate‑limits.
 - 🧠 **Smart routing** — health/latency/context‑aware model selection with automatic fallback chains and per‑message `@`‑directives.
 - 🔬 **Know what's really live** — one‑click per‑model verification pings each model for real (✓ live + latency / ✗ down + reason) and saves the result, so "ready" isn't just a guess.
@@ -92,7 +92,7 @@ Everything is configurable and observable from one loopback‑only UI served by 
 |---|---|---|
 | **Monitor** | Dashboard | Live status: running?, active model, providers ready, cache hit‑rate. |
 | | Models | The picker — all routable models with tier/SWE/latency, favourites, sort, filter, one‑click *Use* / *+Fallback*, and per‑model *Verify* (real ping). |
-| | Activity | Every request: provider used, was‑fallback, downgrade reason, outcome. |
+| | Activity | Every request (newest first): time, the **model that served it**, input tokens, primary‑vs‑fallback, and status — plus a "most recent" card showing what's running right now. |
 | | Limits | Free‑tier token usage vs each provider's per‑minute budget. |
 | | Health | Live provider stability + latency from background probes. |
 | | Cache | Response‑cache hits/misses; clear button. |
@@ -108,7 +108,7 @@ Everything is configurable and observable from one loopback‑only UI served by 
 ## Key concepts
 
 - **Favourites vs fallback.** ★ Favourite a model to shortlist it — a bookmark you can isolate with the **★ Favs** filter; it does *not* change routing. **Fallback** is real routing: **+ Fallback** adds a model to the failover chain that's tried, in order, when your primary is unavailable (toggle it off with **✓ Fallback**).
-- **Auto‑failover.** If your model's provider is down or rate‑limited, Freeway automatically tries the next model in your chain.
+- **Auto‑failover (never stops).** If your model's provider is down or rate‑limited, Freeway automatically tries the next model in your chain — *including mid‑request*: when a provider accepts a request but then fails before producing output (rate‑limit, overload, 5xx, bad model), Freeway re‑routes to the next model and still completes, so a run never dies on one provider's hiccup. With a handful of keys across providers, it just keeps going.
 - **`@`‑Directives.** Define aliases like `fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b`, then type `@big refactor this` to route that one message to Cerebras.
 - **Auto‑fit.** Automatic by default (budget = 90% of the routed model's context): trims the largest non‑essential tools, then the oldest whole turns, so a request can't 413/400 — only touching requests that would exceed the model's window. Set **Routing → Auto‑fit Budget** explicitly only for tiers that cap *below* their advertised context.
 - **Bounded long sessions.** The whole conversation is resent each turn, so it grows. `freeway-claude` sizes Claude Code's compaction window to your budget/model so long sessions compact instead of overflowing. For durable free‑tier use: a **big‑context provider** (Gemini 1M, NVIDIA NIM 128k) + **multiple keys** (`PROVIDER_API_KEY=k1,k2,k3` → round‑robin, N× the per‑minute budget). **Codex** also sends ~10× smaller requests than Claude Code.
@@ -133,7 +133,7 @@ Proxy → `http://localhost:8082` · Frontend dashboard → `http://localhost:19
 ## Architecture
 
 ```
-your tool ──Anthropic / OpenAI──▶  Freeway proxy (FastAPI)  ──▶  ~20 providers
+your tool ──Anthropic / OpenAI──▶  Freeway proxy (FastAPI)  ──▶  26 providers
 (Claude Code / Codex)               • protocol translation        (Groq, Cerebras,
                                      • health / quota / circuit      SambaNova, Gemini,
                                      • fallback + auto-fit            OpenRouter, local…)
@@ -157,6 +157,18 @@ your tool ──Anthropic / OpenAI──▶  Freeway proxy (FastAPI)  ──▶ 
 | Config / logs | `~/.freeway/.env` (from `freeway-init`); logs in `~/.freeway/logs/`. |
 
 ---
+
+## Contributing & Community
+
+Contributions are welcome! Please read:
+
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — dev setup, the CI gates, and the PR process
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — how we work together
+- [`SECURITY.md`](./SECURITY.md) — how to report a vulnerability privately (please don't open a public issue for security problems)
+
+## Changelog
+
+Release history and notable changes are in [`CHANGELOG.md`](./CHANGELOG.md). The current version is in `proxy/pyproject.toml`.
 
 ## Credits & Attribution
 

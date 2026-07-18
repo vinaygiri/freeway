@@ -36,6 +36,50 @@ async def test_anthropic_text_stream_converts_to_responses_sse() -> None:
 
 
 @pytest.mark.asyncio
+async def test_max_tokens_stop_reason_reports_incomplete() -> None:
+    # A response cut off by the output-token limit must surface as `incomplete`
+    # (reason max_output_tokens), NOT a clean `completed` — otherwise Codex thinks
+    # the turn finished and silently stops instead of knowing it was truncated.
+    stream = _anthropic_text_stream("partial ans")
+    stream[-2] = format_sse_event(  # replace the terminal message_delta's stop_reason
+        "message_delta",
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": "max_tokens", "stop_sequence": None},
+            "usage": {"input_tokens": 3, "output_tokens": 16},
+        },
+    )
+    text = await _collect_sse(
+        _ADAPTER.iter_sse_from_anthropic(
+            _aiter(stream),
+            {"model": "nvidia_nim/test-model", "stream": True, "max_output_tokens": 16},
+        )
+    )
+    events = parse_sse_text(text)
+    names = [event.event for event in events]
+    assert names[-1] == "response.incomplete"
+    assert "response.completed" not in names
+    final = events[-1].data["response"]
+    assert final["status"] == "incomplete"
+    assert final["incomplete_details"] == {"reason": "max_output_tokens"}
+
+
+@pytest.mark.asyncio
+async def test_end_turn_stop_reason_reports_completed() -> None:
+    # The normal case is unchanged: a clean end_turn still completes.
+    text = await _collect_sse(
+        _ADAPTER.iter_sse_from_anthropic(
+            _aiter(_anthropic_text_stream("done")),
+            {"model": "nvidia_nim/test-model", "stream": True},
+        )
+    )
+    events = parse_sse_text(text)
+    assert events[-1].event == "response.completed"
+    assert events[-1].data["response"]["status"] == "completed"
+    assert events[-1].data["response"]["incomplete_details"] is None
+
+
+@pytest.mark.asyncio
 async def test_anthropic_tool_stream_converts_to_function_call_item() -> None:
     text = await _collect_sse(
         _ADAPTER.iter_sse_from_anthropic(

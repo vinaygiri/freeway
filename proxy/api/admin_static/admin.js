@@ -247,8 +247,8 @@ async function renderDashboard() {
   const currentUsable = ready.some((p) => p.models.some((m) => m.is_current)) || currentProviderUsable(models);
   // Prefer the model that was ACTUALLY routed most recently (matches Activity),
   // falling back to the configured default MODEL when there's no traffic yet.
-  const rows = activity.requests || [];
-  const last = [...rows].reverse().find((r) => r.provider_id);
+  const rows = activity.requests || [];  // newest first
+  const last = rows.find((r) => r.provider_id);
   const routedRef = last ? `${last.provider_id}/${last.provider_model || last.model || ""}`.replace(/\/$/, "") : "";
   const activeModel = routedRef || models.current_model;
   const differs = routedRef && models.current_model && routedRef !== models.current_model;
@@ -677,23 +677,67 @@ async function toggleFavourite(ref) {
 }
 
 // ---- Activity / Limits / Health / Cache ----
+function servedRefOf(r) {
+  if (r.provider_id) return `${r.provider_id}/${r.provider_model || r.model || ""}`.replace(/\/$/, "");
+  return r.gateway_model || "—";
+}
+function fmtClock(at) {
+  if (!at) return "—";
+  const d = new Date(at * 1000);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+function fmtAgo(at) {
+  if (!at) return "";
+  const s = Math.max(0, Math.floor(Date.now() / 1000 - at));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
 async function renderActivity() {
   const data = await api("/admin/api/requests");
   const body = byId("status-activity");
   body.innerHTML = "";
   if (!data.enabled) { body.appendChild(emptyState("≡", "Request Inspector is off", "Turn it on under Features to see routing decisions here.", "Open Features", "features")); return; }
-  const rows = data.requests || [];
+  const rows = data.requests || [];  // newest first
   if (!rows.length) { body.appendChild(emptyState("≡", "No requests yet", "Point a tool at Freeway and run something — it'll show up here live.")); return; }
+
+  // "What ran most recently" — the answer to "which model is running?"
+  const latest = rows.find((r) => r.provider_id) || rows[0];
+  const okLatest = latest.outcome === "routed";
+  const hero = el("div", `hero ${okLatest ? "ok" : "warn"}`);
+  hero.appendChild(el("span", "hero-dot"));
+  const ht = el("div");
+  ht.appendChild(el("div", "hero-title", `Most recent: ${shortRef(servedRefOf(latest))}`));
+  const bits = [
+    latest.was_fallback ? "switched via fallback" : "primary model",
+    `${latest.input_tokens != null ? latest.input_tokens : "?"} input tokens`,
+    latest.outcome || "—",
+    `${fmtClock(latest.at)} (${fmtAgo(latest.at)})`,
+  ];
+  if (latest.error) bits.push(latest.error);
+  ht.appendChild(el("div", "hero-sub", bits.join(" · ")));
+  hero.appendChild(ht);
+  body.appendChild(hero);
+
   const table = el("table", "data-table");
-  table.innerHTML = "<thead><tr><th>Provider</th><th>Model</th><th>Fallback</th><th>Reason</th><th>Outcome</th></tr></thead>";
+  table.innerHTML = "<thead><tr><th>Time</th><th>Served model</th><th>In-tokens</th><th>Fallback</th><th>Status</th></tr></thead>";
   const tb = el("tbody");
-  rows.slice().reverse().forEach((r) => {
+  rows.forEach((r) => {  // newest first — current request is at the top
     const tr = el("tr");
-    tr.appendChild(el("td", null, r.provider_id || "—"));
-    tr.appendChild(el("td", "mono-cell", r.provider_model || r.model || "—"));
-    const fb = el("td"); fb.appendChild(badge(r.was_fallback ? "yes" : "no", r.was_fallback ? "warn" : "ok")); tr.appendChild(fb);
-    tr.appendChild(el("td", null, r.downgrade_reason || "—"));
-    const o = el("td"); o.appendChild(badge(r.outcome || "—", r.outcome === "routed" ? "ok" : "warn")); tr.appendChild(o);
+    const t = el("td", "mono-cell", fmtClock(r.at)); t.title = fmtAgo(r.at); tr.appendChild(t);
+    tr.appendChild(el("td", "mono-cell", servedRefOf(r)));
+    tr.appendChild(el("td", "mono-cell", r.input_tokens != null ? String(r.input_tokens) : "—"));
+    const fb = el("td");
+    const fbb = badge(r.was_fallback ? "switched" : "primary", r.was_fallback ? "warn" : "ok");
+    if (r.was_fallback && r.downgrade_reason) fbb.title = r.downgrade_reason;
+    fb.appendChild(fbb); tr.appendChild(fb);
+    const o = el("td");
+    const ob = badge(r.outcome || "—", r.outcome === "routed" ? "ok" : "warn");
+    if (r.error) ob.title = r.error;
+    o.appendChild(ob); tr.appendChild(o);
     tb.appendChild(tr);
   });
   table.appendChild(tb);
@@ -801,7 +845,7 @@ async function renderHelp() {
     <section class="guide-card">
       <h3>What is Freeway?</h3>
       <p>Freeway is one local endpoint that sits between your coding tools (Claude Code, Codex,
-      or any OpenAI-compatible client) and ~20 free / free-tier AI providers. It translates
+      or any OpenAI-compatible client) and 26 AI providers (free-tier cloud + local). It translates
       protocols, picks a working model, fails over when one is down, and trims oversized
       requests so free tiers don't reject them.</p>
     </section>
@@ -847,7 +891,7 @@ async function renderHelp() {
         <tbody>
           <tr><td><strong>Dashboard</strong></td><td>At-a-glance: is Freeway running, active model, providers ready, cache hit-rate.</td></tr>
           <tr><td><strong>Models</strong></td><td>The picker. Every model you can route to + live status. Sort by Quality/Latency/Name, filter by Ready/All/★ Favs, star favourites, one-click <em>Use</em> / <em>+Fallback</em>. <em>“ready”</em> is provider-level; use <em>⚡ Verify all</em> or a model's <em>Test</em> to ping each model for real (results are saved).</td></tr>
-          <tr><td><strong>Activity</strong></td><td>Recent requests: which provider served each, whether it fell back, and why.</td></tr>
+          <tr><td><strong>Activity</strong></td><td>Every request, newest first: time, the model that served it, input tokens, primary-vs-fallback, and status — with a "most recent" card at the top showing what's running right now.</td></tr>
           <tr><td><strong>Limits</strong></td><td>Free-tier token usage vs each provider's per-minute budget.</td></tr>
           <tr><td><strong>Health</strong></td><td>Live provider stability + latency from background probes.</td></tr>
           <tr><td><strong>Cache</strong></td><td>Response-cache hits/misses; clear it here.</td></tr>
@@ -855,6 +899,7 @@ async function renderHelp() {
           <tr><td><strong>Routing</strong></td><td>Default model, fallback chain, @-directives, and auto-fit (the 413 fix).</td></tr>
           <tr><td><strong>Features</strong></td><td>Toggle health probes, quota tracking, request inspector, cache, web tools.</td></tr>
           <tr><td><strong>Privacy</strong></td><td>Hard rules: never send prompts to training / non-local / out-of-region providers.</td></tr>
+          <tr><td><strong>Messaging</strong></td><td>Optional Discord / Telegram bot + voice-note transcription for remote sessions.</td></tr>
         </tbody>
       </table>
     </section>
@@ -865,9 +910,12 @@ async function renderHelp() {
       <p><strong>★ Favourite</strong> is a personal shortlist/bookmark — it does not change routing. Use the
       <em>★ Favs</em> filter to find your starred models quickly. <strong>Fallback</strong> is real routing:
       <em>“+ Fallback”</em> adds a model to the failover chain that's tried, in order, when your primary fails.</p></div>
-      <div class="guide-concept"><h4>Fallback / auto-failover</h4>
-      <p>If your model's provider is down or rate-limited, Freeway automatically tries the next model in
-      your fallback chain — no error to you.</p></div>
+      <div class="guide-concept"><h4>Fallback / auto-failover (never stops)</h4>
+      <p>If your model's provider is down, rate-limited, or circuit-open, Freeway skips it and tries the next
+      model in your fallback chain — no error to you. This works <strong>mid-request</strong> too: if a provider
+      accepts a request but then fails before producing any output (rate-limit, overload, 5xx, bad model),
+      Freeway re-routes to the next model and still completes the response. With a few keys across providers,
+      a run keeps going instead of dying on one provider's hiccup.</p></div>
       <div class="guide-concept"><h4>@-Directives (per-message model switching)</h4>
       <p>Define aliases in <em>Routing → Inline @-Directives</em> as <code>key=provider/model</code>, e.g.
       <span class="mono-example">fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b</span>

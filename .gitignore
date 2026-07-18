@@ -1,0 +1,55 @@
+# Root .gitignore for the Freeway repo.
+# Subproject-specific ignores live in proxy/.gitignore and frontend/.gitignore
+# (git applies those within their subtrees); this covers cross-cutting artifacts.
+
+# Secrets / environment (never commit) — runtime config lives in ~/.freeway/.env
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / web
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Logs & runtime
+*.log
+logs/
+*.pid
+
+# Test / smoke artifacts
+.smoke-results/
+
+# Packaged builds
+*.zip
+*.tar.gz
+
+# Editors & tooling
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/
+.cursor/
+.serena/
+
+# Internal task board (not part of the public product)
+.kandown/
+
+# OS
+.DS_Store
+Thumbs.db

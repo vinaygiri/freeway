@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 from api.auto_fit import (
+    _first_sentence,
+    _strip_schema_descriptions,
+    compress_tools_to_budget,
     parse_keep_tools,
     trim_messages_to_budget,
     trim_tools_to_budget,
@@ -201,3 +206,158 @@ def test_messages_noop_when_disabled_or_single() -> None:
         )
         == one  # never drop the only/current message
     )
+
+
+# ---- tool-description compression (compress_tools_to_budget) — v2.6.0 ----
+
+
+def _ctool(name: str, desc: str, schema: dict) -> Tool:
+    return Tool(name=name, description=desc, input_schema=schema)
+
+
+def _ccounter(messages, system, tools) -> int:
+    """Mirror core get_token_count for tools: name + description + json(schema)."""
+    total = 0
+    for t in tools or []:
+        blob = t.name + (t.description or "") + json.dumps(t.input_schema or {})
+        total += len(blob) // 4 + 1
+    total += 10 if messages else 0
+    return total
+
+
+def test_first_sentence() -> None:
+    # v2.6.0
+    assert _first_sentence("First sentence. Second one.") == "First sentence"
+    assert _first_sentence("Line one\nLine two") == "Line one"
+    assert _first_sentence("short") == "short"
+    assert _first_sentence("") == ""
+    assert _first_sentence("z" * 300) == "z" * 200  # capped at _MAX_TOOL_DESC_CHARS
+
+
+def test_strip_schema_descriptions_recursive() -> None:
+    # v2.6.0
+    schema = {
+        "type": "object",
+        "description": "top-level prose",
+        "properties": {
+            "a": {"type": "string", "description": "param a prose"},
+            "b": {
+                "type": "array",
+                "items": {"type": "object", "description": "nested"},
+            },
+        },
+        "required": ["a"],
+    }
+    out = _strip_schema_descriptions(schema)
+    assert "description" not in json.dumps(out)  # gone at every depth
+    assert out["type"] == "object"
+    assert out["required"] == ["a"]  # machine-relevant parts preserved
+    assert out["properties"]["a"] == {"type": "string"}
+    assert out["properties"]["b"]["items"] == {"type": "object"}
+
+
+def test_strip_schema_keeps_property_named_description() -> None:
+    # v2.6.0 regression: a tool parameter literally NAMED "description" (Agent,
+    # Monitor, TaskCreate, ...) must survive. Dropping it while it stays in
+    # "required" yields an invalid schema the provider rejects (HTTP 400).
+    schema = {
+        "type": "object",
+        "description": "annotation prose to drop",
+        "properties": {
+            "description": {"type": "string", "description": "param's own prose"},
+            "prompt": {"type": "string", "description": "more prose"},
+        },
+        "required": ["description", "prompt"],
+    }
+    out = _strip_schema_descriptions(schema)
+    # the PROPERTY named "description" survives (still declared + required-valid)
+    assert out["properties"]["description"] == {"type": "string"}
+    assert out["required"] == ["description", "prompt"]
+    assert set(out["properties"]) == {"description", "prompt"}
+    # ...but every annotation prose value is gone
+    assert "prose" not in json.dumps(out)
+
+
+def test_compress_noop_when_under_budget() -> None:
+    # v2.6.0
+    tools = [_ctool("Bash", "d" * 40, {"type": "object"})]
+    out, changed = compress_tools_to_budget(
+        messages=["m"],
+        system=None,
+        tools=tools,
+        max_tokens=10_000,
+        keep_names=frozenset({"Bash"}),
+        count_tokens=_ccounter,
+    )
+    assert changed is False
+    assert out[0].description == "d" * 40  # untouched
+
+
+def test_compress_level1_strips_schema_prose_keeps_descriptions() -> None:
+    # v2.6.0 — Level 1 alone makes it fit: schema prose stripped, tool desc kept.
+    big_schema = {
+        "type": "object",
+        "properties": {"x": {"type": "string", "description": "P" * 400}},
+        "required": ["x"],
+    }
+    tools = [_ctool("Workflow", "T" * 40, big_schema)]
+    before = _ccounter(["m"], None, tools)
+    out, changed = compress_tools_to_budget(
+        messages=["m"],
+        system=None,
+        tools=tools,
+        max_tokens=before - 1,  # just over budget
+        keep_names=frozenset(),
+        count_tokens=_ccounter,
+    )
+    assert changed is True
+    assert out[0].description == "T" * 40  # tool-level description preserved
+    assert "description" not in json.dumps(out[0].input_schema)  # param prose gone
+    assert out[0].input_schema is not None
+    assert out[0].input_schema["required"] == ["x"]  # still a valid schema
+    assert isinstance(out[0], Tool)
+
+
+def test_compress_level2_shortens_only_nonkeep_tools() -> None:
+    # v2.6.0 — Level 1 can't fit (descriptions dominate) -> Level 2 shortens the
+    # non-keep tool's description while the keep-list tool keeps its full description.
+    tools = [
+        _ctool("Bash", "B" * 800, {"type": "object"}),  # keep-list
+        _ctool("Workflow", "W" * 800, {"type": "object"}),  # non-essential
+    ]
+    out, changed = compress_tools_to_budget(
+        messages=["m"],
+        system=None,
+        tools=tools,
+        max_tokens=50,  # impossible for Level 1 -> forces Level 2 (best effort)
+        keep_names=frozenset({"Bash"}),
+        count_tokens=_ccounter,
+    )
+    assert changed is True
+    assert len(out) == 2  # every tool still present
+    by_name = {t.name: t for t in out}
+    assert by_name["Bash"].description == "B" * 800  # keep-list keeps full prose
+    assert by_name["Workflow"].description == "W" * 200  # non-keep shortened (capped)
+
+
+def test_compress_noop_without_tools_or_budget() -> None:
+    # v2.6.0
+    out, changed = compress_tools_to_budget(
+        messages=["m"],
+        system=None,
+        tools=None,
+        max_tokens=100,
+        keep_names=frozenset(),
+        count_tokens=_ccounter,
+    )
+    assert out == [] and changed is False
+    tools = [_ctool("Bash", "d" * 4000, {"type": "object"})]
+    out, changed = compress_tools_to_budget(
+        messages=["m"],
+        system=None,
+        tools=tools,
+        max_tokens=0,  # disabled
+        keep_names=frozenset(),
+        count_tokens=_ccounter,
+    )
+    assert changed is False and out[0].description == "d" * 4000

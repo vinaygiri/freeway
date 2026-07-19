@@ -933,12 +933,19 @@ async function renderHelp() {
       <span class="mono-example">fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b</span>
       Then type <code>@big refactor this</code> in a prompt to route that one message to Cerebras.</p></div>
       <div class="guide-concept"><h4>Auto-fit (the “request too large” / 413 · 400 fix)</h4>
-      <p>Editors like Claude Code send every tool's schema plus the whole conversation on every request, which
-      grows past small free limits. Auto-fit trims a too-big request to a budget — first the largest
-      non-essential tool schemas (core coding tools always kept), then the oldest whole turns — so it can't be
-      rejected. <strong>Default is automatic</strong>: the budget is 90% of the routed model's context, so it only
-      trims requests that would exceed the model's own window (working requests are untouched). Set
-      <em>Routing → Auto-fit Budget</em> explicitly only for tiers that cap below their advertised context.</p></div>
+      <p>Editors like Claude Code send every tool's schema plus the whole conversation on every request (a real
+      47-tool payload is ~31k tokens, 79% of it tool schemas), which grows past small free limits. When a request
+      is over budget, auto-fit first <strong>compresses the tool schemas</strong> — shortens each tool's description
+      and strips schema prose while <strong>keeping every tool</strong> — taking that ~31k request to ~13k. Only if
+      it still doesn't fit does it drop the largest non-essential tools (core coding tools always kept), then the
+      oldest whole turns. <strong>Default is automatic</strong>: the budget is 90% of the routed model's context, so
+      it only touches requests that would exceed the model's own window (working requests are untouched). Set
+      <em>Routing → Auto-fit Budget</em> explicitly only for tiers that cap below their advertised context, and set
+      <code>AUTO_FIT_COMPRESS_TOOLS=false</code> to disable compression.</p>
+      <p><strong>Hard ~8k tiers &amp; Claude Code:</strong> Claude Code's system prompt alone is a ~6.5k floor, so
+      even full compression can't fit it under a hard 8k cap — use a <strong>big-context free provider</strong>
+      (Gemini, NVIDIA NIM) as the primary for Claude Code, and reserve tiny 8k tiers for <strong>Codex</strong>
+      (which sends ~4k and fits easily).</p></div>
       <div class="guide-concept"><h4>Bounded long sessions (compaction)</h4>
       <p>Because the whole conversation is resent each turn, long sessions grow. <code>freeway-claude</code> sizes
       Claude Code's compaction window to your budget / model context, so the conversation compacts and stays

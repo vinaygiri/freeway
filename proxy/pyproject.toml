@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "freeway-ai"
-version = "2.5.4"
+version = "2.6.0"
 description = "Freeway — one local endpoint routing Claude Code / Codex / OpenAI tools to many free AI models"
 readme = "README.md"
 requires-python = ">=3.14.0"

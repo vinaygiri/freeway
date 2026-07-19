@@ -561,7 +561,7 @@ wheels = [
 
 [[package]]
 name = "freeway-ai"
-version = "2.5.4"
+version = "2.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

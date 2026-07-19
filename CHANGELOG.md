@@ -5,6 +5,24 @@ All notable changes to Freeway are documented here. The format is based on
 [Semantic Versioning](https://semver.org/) (the version lives in
 `proxy/pyproject.toml`).
 
+## [2.6.0] — 2026-07-19 · tool-schema compression (fit more on free tiers)
+
+### Added
+- **Auto-fit now compresses tool schemas before dropping any tools.** Claude Code
+  re-sends every tool's full schema on every request — on a real 47-tool payload
+  that's **31,265 tokens, 79% of it tool schemas**. When a request is over budget,
+  Freeway now shrinks the tool block (shortens each tool's description to its first
+  sentence and strips the verbose prose from parameter schemas) **while keeping
+  every tool present with a valid schema**, taking that request to **~11,900 tokens
+  (−62%)**. It only fills the gap the old behavior filled by *deleting* tools — a
+  leaner tool always beats a missing one — so Claude Code fits far more free tiers
+  and burns per-minute quota ~2.6× slower.
+- Tiered / least-loss-first: gentlest compression that makes it fit wins, and
+  **core coding tools (`AUTO_FIT_KEEP_TOOLS`) keep their full descriptions**.
+- New `AUTO_FIT_COMPRESS_TOOLS` (default `true`). Acts **only when over budget** —
+  requests that already fit are byte-for-byte untouched, so there's no quality
+  change in the common case. Set `false` to restore drop-only behavior.
+
 ## [2.5.4] — 2026-07-19 · reliability hardening ("never stops")
 
 An adversarial audit of the whole request lifecycle (both protocols) found and

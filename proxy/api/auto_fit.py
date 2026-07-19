@@ -16,6 +16,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
+from api.models.anthropic import Tool
+
 
 class _NamedTool(Protocol):
     name: str
@@ -28,6 +30,110 @@ TokenCounter = Callable[[Any, Any, Any], int]
 def parse_keep_tools(spec: str) -> frozenset[str]:
     """Parse a comma-separated keep-list into a set of exact tool names."""
     return frozenset(name.strip() for name in spec.split(",") if name.strip())
+
+
+# Max length of a shortened (first-sentence) tool description, in characters.
+_MAX_TOOL_DESC_CHARS = 200
+
+
+# JSON-Schema keys whose direct children are *named subschemas* (property names,
+# not annotations). Their keys must be preserved — only their values are scrubbed —
+# so a tool parameter literally named "description" survives (e.g. Agent/TaskCreate).
+_SCHEMA_NAMED_MAPS = frozenset(
+    {"properties", "$defs", "definitions", "patternProperties"}
+)
+
+
+def _strip_schema_descriptions(schema: Any) -> Any:
+    """Return a copy of a JSON-schema value with annotation ``description`` prose
+    removed, keeping the machine-relevant parts a provider needs (``type``,
+    ``enum``, ``required``, ``properties``, ``items``).
+
+    A ``description`` that is a *property name* (a key under ``properties``/``$defs``
+    /``definitions``/``patternProperties``) is a real tool parameter and is kept —
+    only string ``description`` *annotations* on a schema node are dropped. Removing
+    the property while it stays in ``required`` would make the schema invalid and the
+    provider reject the request.
+    """
+    if isinstance(schema, dict):
+        out: dict[str, Any] = {}
+        for key, value in schema.items():
+            if key == "description" and isinstance(value, str):
+                continue  # annotation prose — drop
+            if key in _SCHEMA_NAMED_MAPS and isinstance(value, dict):
+                out[key] = {
+                    name: _strip_schema_descriptions(subschema)
+                    for name, subschema in value.items()
+                }
+            else:
+                out[key] = _strip_schema_descriptions(value)
+        return out
+    if isinstance(schema, list):
+        return [_strip_schema_descriptions(item) for item in schema]
+    return schema
+
+
+def _first_sentence(text: str) -> str:
+    """Reduce a tool description to its first sentence, capped in length.
+
+    The model still learns what the tool does (name + one line) without the
+    multi-paragraph usage prose that dominates the token cost.
+    """
+    line = text.strip().split("\n", 1)[0].strip()
+    head = line.split(". ", 1)[0].strip()
+    return (head or line)[:_MAX_TOOL_DESC_CHARS].strip()
+
+
+def _compress_tool(tool: Tool, *, shorten_desc: bool) -> Tool:
+    """Return a copy of ``tool`` with schema prose stripped and (optionally) a
+    first-sentence description. Preserves every other field (``type``,
+    ``cache_control``) via ``model_copy`` so the schema stays provider-valid.
+    """
+    update: dict[str, Any] = {}
+    if tool.input_schema:
+        update["input_schema"] = _strip_schema_descriptions(tool.input_schema)
+    if shorten_desc and tool.description:
+        update["description"] = _first_sentence(tool.description)
+    if not update:
+        return tool
+    return tool.model_copy(update=update)
+
+
+def compress_tools_to_budget(
+    *,
+    messages: Any,
+    system: Any,
+    tools: Sequence[Tool] | None,
+    max_tokens: int,
+    keep_names: frozenset[str],
+    count_tokens: TokenCounter,
+) -> tuple[list[Tool], bool]:
+    """Shrink tool schemas (instead of dropping them) to fit ``max_tokens``.
+
+    Returns ``(tools, changed)``. Only acts when the request is over budget:
+
+    * **Level 1** strips ``input_schema`` prose from every tool while keeping each
+      tool-level description. If that fits, we stop there.
+    * **Level 2** additionally shortens the tool-level description to its first
+      sentence for tools *not* in ``keep_names`` (core coding tools keep their full
+      description). Returned best-effort even if still over budget.
+
+    Every tool stays present — the caller may still drop tools afterwards if even
+    full compression doesn't fit. A leaner tool always beats a missing one.
+    """
+    if not tools or max_tokens <= 0:
+        return (list(tools) if tools else []), False
+    if count_tokens(messages, system, tools) <= max_tokens:
+        return list(tools), False
+
+    level1 = [_compress_tool(tool, shorten_desc=False) for tool in tools]
+    if count_tokens(messages, system, level1) <= max_tokens:
+        return level1, True
+
+    level2 = [
+        _compress_tool(tool, shorten_desc=tool.name not in keep_names) for tool in tools
+    ]
+    return level2, True
 
 
 def trim_tools_to_budget[T: _NamedTool](

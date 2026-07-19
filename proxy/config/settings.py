@@ -163,6 +163,13 @@ class Settings(BaseSettings):
         ),
         validation_alias="AUTO_FIT_KEEP_TOOLS",
     )
+    # When a request is over the auto-fit budget, first shorten tool descriptions
+    # and strip schema prose (keeping every tool) before dropping any tools. Acts
+    # only over budget — fitting requests are untouched — so default-on is safe and
+    # strictly better than the drop-only fallback (a leaner tool beats a missing one).
+    auto_fit_compress_tools: bool = Field(
+        default=True, validation_alias="AUTO_FIT_COMPRESS_TOOLS"
+    )
 
     # Comma-separated provider/model refs you've starred in the Models view. Used by
     # the admin UI's "Use only favourites" action to build the primary + fallback chain.

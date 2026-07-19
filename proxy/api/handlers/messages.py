@@ -9,13 +9,14 @@ from typing import Any
 from loguru import logger
 
 from api.auto_fit import (
+    compress_tools_to_budget,
     parse_keep_tools,
     trim_messages_to_budget,
     trim_tools_to_budget,
 )
 from api.detection import is_safety_classifier_request
 from api.model_router import ModelRouter, RoutedMessagesRequest
-from api.models.anthropic import MessagesRequest
+from api.models.anthropic import MessagesRequest, Tool
 from api.optimization_handlers import try_optimizations
 from api.provider_execution import ProviderExecutionService, TokenCounter
 from api.request_errors import require_non_empty_messages, unexpected_http_exception
@@ -170,22 +171,49 @@ class MessagesHandler:
         kept_tools = request.tools
         if request.tools:
             keep_names = parse_keep_tools(self._settings.auto_fit_keep_tools)
+            # First shrink tool schemas (keeps every tool) so far fewer ever get
+            # dropped; only then drop the largest non-essential tools if still over.
+            working_tools: list[Tool] = list(request.tools)
+            compressed = False
+            if self._settings.auto_fit_compress_tools:
+                working_tools, compressed = compress_tools_to_budget(
+                    messages=request.messages,
+                    system=request.system,
+                    tools=request.tools,
+                    max_tokens=max_tokens,
+                    keep_names=keep_names,
+                    count_tokens=self._token_counter,
+                )
+                if compressed:
+                    logger.debug(
+                        "AUTO_FIT compressed {} tool schemas for {} tokens (~{} -> ~{})",
+                        len(working_tools),
+                        max_tokens,
+                        self._token_counter(
+                            request.messages, request.system, request.tools
+                        ),
+                        self._token_counter(
+                            request.messages, request.system, working_tools
+                        ),
+                    )
             kept_tools = trim_tools_to_budget(
                 messages=request.messages,
                 system=request.system,
-                tools=request.tools,
+                tools=working_tools,
                 max_tokens=max_tokens,
                 keep_names=keep_names,
                 count_tokens=self._token_counter,
             )
-            if len(kept_tools or []) != len(request.tools):
+            dropped = len(working_tools) - len(kept_tools or [])
+            if compressed or dropped:
                 updates["tools"] = kept_tools
-                logger.debug(
-                    "AUTO_FIT dropped {} of {} tools to fit {} tokens",
-                    len(request.tools) - len(kept_tools or []),
-                    len(request.tools),
-                    max_tokens,
-                )
+                if dropped:
+                    logger.debug(
+                        "AUTO_FIT dropped {} of {} tools to fit {} tokens",
+                        dropped,
+                        len(request.tools),
+                        max_tokens,
+                    )
 
         kept_messages = trim_messages_to_budget(
             messages=request.messages,

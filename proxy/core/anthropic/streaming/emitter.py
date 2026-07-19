@@ -20,12 +20,44 @@ STOP_REASON_MAP = {
     "content_filter": "end_turn",
 }
 
+# Free-tier providers are inconsistent with finish_reason. These non-standard
+# values all mean "output was truncated" — map them to max_tokens so the
+# truncation is NEVER masked as a clean stop (which would make a client stop
+# mid-task). Matched case-insensitively.
+_TRUNCATION_ALIASES = frozenset(
+    {
+        "max_tokens",
+        "max_output_tokens",
+        "maxtokens",
+        "model_length",
+        "token_limit",
+        "output_limit",
+        "length_limit",
+        "max_completion_tokens",
+    }
+)
+# Non-standard "the model wants to call a tool" values.
+_TOOL_ALIASES = frozenset({"function_call", "tool_call", "tool_use"})
+
 
 def map_stop_reason(openai_reason: str | None) -> str:
-    """Map OpenAI ``finish_reason`` values to Anthropic ``stop_reason`` values."""
-    return (
-        STOP_REASON_MAP.get(openai_reason, "end_turn") if openai_reason else "end_turn"
-    )
+    """Map OpenAI ``finish_reason`` to Anthropic ``stop_reason``, robustly.
+
+    Normalizes case and recognizes common non-standard provider values so a
+    truncation is never silently reported as a clean ``end_turn`` (which would
+    make a coding agent stop mid-task). Genuinely unknown values default to
+    ``end_turn`` (the safe assumption for a provider that finished normally with
+    a quirky value)."""
+    if not openai_reason:
+        return "end_turn"
+    key = openai_reason.strip().lower()
+    if key in STOP_REASON_MAP:
+        return STOP_REASON_MAP[key]
+    if key in _TRUNCATION_ALIASES:
+        return "max_tokens"
+    if key in _TOOL_ALIASES:
+        return "tool_use"
+    return "end_turn"
 
 
 def format_sse_event(event_type: str, data: dict[str, Any]) -> str:

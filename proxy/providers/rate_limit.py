@@ -17,6 +17,12 @@ from core.trace import trace_event
 T = TypeVar("T")
 
 UPSTREAM_TRANSIENT_TOTAL_ATTEMPTS = 5
+# On a 429 (rate limit), prefer failing over to a FRESH provider over waiting out
+# a per-minute limit on the same one (which the exponential backoff rarely clears).
+# Cap same-provider 429 retries low so cross-provider failover happens fast — one
+# quick retry catches a transient blip, then it moves on. 5xx keeps the full
+# backoff (transient server errors often clear quickly).
+_RATE_LIMIT_FAILOVER_RETRIES = 1
 DEFAULT_UPSTREAM_MAX_RETRIES = UPSTREAM_TRANSIENT_TOTAL_ATTEMPTS - 1
 
 
@@ -271,12 +277,16 @@ class GlobalRateLimiter:
                     else f"Upstream server error ({status})"
                 )
                 last_exc = e
-                if attempt >= max_retries:
+                # 429 fails over fast (cap retries low); 5xx keeps the full backoff.
+                effective_max = (
+                    _RATE_LIMIT_FAILOVER_RETRIES if status == 429 else max_retries
+                )
+                if attempt >= effective_max:
                     logger.warning(
                         "{} retry exhausted after {} retries (attempts={})",
                         label,
-                        max_retries,
-                        total_attempts,
+                        effective_max,
+                        attempt + 1,
                     )
                     break
 

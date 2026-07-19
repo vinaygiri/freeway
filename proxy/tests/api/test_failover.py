@@ -128,6 +128,32 @@ def test_auth_error_poison_skips_remaining_models_of_provider():
     assert calls == ["groq", "cerebras"]  # groq/m2 skipped after auth failure
 
 
+def test_failover_walks_entire_chain_beyond_three():
+    # A user with many fallback providers must have ALL of them tried, not an
+    # arbitrary 3 — the whole point of "never stops". First four fail, the fifth
+    # (a fresh provider) succeeds; it must be reached.
+    calls: list[str] = []
+    service = _service(
+        _getter(
+            {
+                "p1": APIError("a", status_code=503),
+                "p2": APIError("b", status_code=503),
+                "p3": APIError("c", status_code=503),
+                "p4": APIError("d", status_code=503),
+            },
+            calls,
+        ),
+        RoutingPolicy(),
+    )
+    result = _run(
+        service,
+        _routed("p1"),
+        [_fallback("p2"), _fallback("p3"), _fallback("p4"), _fallback("p5")],
+    )
+    assert result is not None  # reached and committed the 5th candidate
+    assert calls == ["p1", "p2", "p3", "p4", "p5"]  # every candidate tried
+
+
 def test_all_candidates_fail_raises_provider_error():
     calls: list[str] = []
     service = _service(

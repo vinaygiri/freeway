@@ -2,6 +2,10 @@
 # Subproject-specific ignores live in proxy/.gitignore and frontend/.gitignore
 # (git applies those within their subtrees); this covers cross-cutting artifacts.
 
+# Private launch/marketing kit — keep the canonical copy in a secret gist / private repo
+/LAUNCH.md
+LAUNCH_PLAYBOOK.md
+
 # Secrets / environment (never commit) — runtime config lives in ~/.freeway/.env
 .env
 .env.local

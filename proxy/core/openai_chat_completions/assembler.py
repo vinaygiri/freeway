@@ -81,7 +81,8 @@ class ChatCompletionAssembler:
         if self.terminal:
             return []
         chunks = self._ensure_started()
-        chunks.extend(self._finish())
+        # Only reached when the stream ended WITHOUT a clean stop — it was cut off.
+        chunks.extend(self._finish(abnormal_end=True))
         return chunks
 
     def _ensure_started(self) -> list[str]:
@@ -190,11 +191,16 @@ class ChatCompletionAssembler:
         if isinstance(usage.get("output_tokens"), int):
             self._completion_tokens = usage["output_tokens"]
 
-    def _finish(self) -> list[str]:
+    def _finish(self, *, abnormal_end: bool = False) -> list[str]:
         if self.terminal:
             return []
         self.terminal = True
-        chunks = [self._chunk({}, finish_reason=self._resolved_finish_reason())]
+        chunks = [
+            self._chunk(
+                {},
+                finish_reason=self._resolved_finish_reason(abnormal_end=abnormal_end),
+            )
+        ]
         if self._include_usage():
             chunks.append(self._usage_chunk())
         return chunks
@@ -206,10 +212,15 @@ class ChatCompletionAssembler:
         self._error = _error_from_anthropic(data)
         return [_sse(self._error)]
 
-    def _resolved_finish_reason(self) -> str:
+    def _resolved_finish_reason(self, *, abnormal_end: bool = False) -> str:
         if self._finish_reason:
             return self._finish_reason
-        return "tool_calls" if self._tool_calls else "stop"
+        if self._tool_calls:
+            return "tool_calls"
+        # Stream ended without a clean stop and no finish_reason was recorded — it
+        # was cut off. Report "length" (truncated) so the client doesn't treat a
+        # cut-off response as a clean finish and stop.
+        return "length" if abnormal_end else "stop"
 
     def _include_usage(self) -> bool:
         options = self._request.get("stream_options")

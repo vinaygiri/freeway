@@ -10,7 +10,6 @@ import pytest
 
 from config.nim import NimSettings
 from core.anthropic.stream_contracts import (
-    assert_anthropic_stream_contract,
     parse_sse_text,
 )
 from core.anthropic.streaming import (
@@ -262,8 +261,10 @@ class TestStreamingExceptionHandling:
         assert "Connection lost after tool" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_empty_response_gets_space(self):
-        """Empty response with no text/tools gets a single space text block."""
+    async def test_empty_completion_fails_over(self):
+        """A completely empty completion (no text/reasoning/tools) raises a retryable
+        error so the failover layer tries ANOTHER provider — instead of a blank turn
+        that makes a coding agent silently stop."""
         provider = _make_provider()
         request = _make_request()
 
@@ -283,12 +284,9 @@ class TestStreamingExceptionHandling:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            pytest.raises(APIError),
         ):
-            events = await _collect_stream(provider, request)
-
-        event_text = "".join(events)
-        assert '"text_delta"' in event_text
-        assert "message_stop" in event_text
+            await _collect_stream(provider, request)
 
     @pytest.mark.asyncio
     async def test_upstream_completion_tokens_null_emits_int_usage(self):
@@ -1222,8 +1220,15 @@ class TestStreamChunkEdgeCases:
         empty_choices_chunk.choices = []
         empty_choices_chunk.usage = None
 
-        finish_chunk = _make_chunk(finish_reason="stop")
-        stream_mock = AsyncStreamMock([empty_choices_chunk, finish_chunk])
+        # A valid content chunk follows the bad one: the bad chunk must be skipped
+        # and the real content must still flow through.
+        stream_mock = AsyncStreamMock(
+            [
+                empty_choices_chunk,
+                _make_chunk(content="hello"),
+                _make_chunk(finish_reason="stop"),
+            ]
+        )
 
         with (
             patch.object(
@@ -1243,6 +1248,7 @@ class TestStreamChunkEdgeCases:
 
         event_text = "".join(events)
         assert "message_start" in event_text
+        assert "hello" in event_text
         assert "message_stop" in event_text
 
     @pytest.mark.asyncio
@@ -1258,8 +1264,13 @@ class TestStreamChunkEdgeCases:
         choice.finish_reason = None
         none_delta_chunk.choices = [choice]
 
-        finish_chunk = _make_chunk(finish_reason="stop")
-        stream_mock = AsyncStreamMock([none_delta_chunk, finish_chunk])
+        stream_mock = AsyncStreamMock(
+            [
+                none_delta_chunk,
+                _make_chunk(content="hello"),
+                _make_chunk(finish_reason="stop"),
+            ]
+        )
 
         with (
             patch.object(
@@ -1279,6 +1290,7 @@ class TestStreamChunkEdgeCases:
 
         event_text = "".join(events)
         assert "message_start" in event_text
+        assert "hello" in event_text
         assert "message_stop" in event_text
 
     @pytest.mark.asyncio
@@ -1338,10 +1350,10 @@ class TestStreamChunkEdgeCases:
 
 
 @pytest.mark.asyncio
-async def test_openai_compat_stream_ends_with_contract_when_tool_name_never_arrives() -> (
-    None
-):
-    """Nameless / incomplete tool-call buffer must not break Anthropic stream contract."""
+async def test_nameless_tool_call_producing_nothing_fails_over() -> None:
+    """A nameless/incomplete tool call that yields no usable output produces an
+    empty completion — which now fails over to another provider (retryable error)
+    rather than a blank turn that stops the agent."""
     provider = _make_provider()
     request = _make_request()
     tc0 = SimpleNamespace(
@@ -1365,8 +1377,6 @@ async def test_openai_compat_stream_ends_with_contract_when_tool_name_never_arri
             new_callable=AsyncMock,
             return_value=False,
         ),
+        pytest.raises(APIError),
     ):
-        events = await _collect_stream(provider, request)
-    text = "".join(events)
-    assert_anthropic_stream_contract(parse_sse_text(text))
-    assert "text_delta" in text
+        await _collect_stream(provider, request)

@@ -23,6 +23,7 @@ from core.anthropic.streaming import (
 )
 from core.trace import provider_chat_body_snapshot, trace_event
 from providers.error_mapping import map_error
+from providers.exceptions import APIError
 from providers.transports.http import maybe_await_aclose
 
 from .recovery import OpenAIChatRecovery
@@ -329,6 +330,19 @@ class OpenAIChatStreamAdapter:
             or ledger.blocks.thinking_index != -1
             or has_emitted_tool
         )
+        if (
+            not has_content_blocks
+            and not ledger.accumulated_text.strip()
+            and not ledger.accumulated_reasoning.strip()
+        ):
+            # The provider returned a COMPLETELY empty response — no text, no
+            # reasoning, no tool call (a common free-tier glitch). Raise a retryable
+            # error so the failover layer tries ANOTHER provider, instead of
+            # fabricating a blank turn that makes a coding agent silently stop.
+            # Nothing has been committed to the client, so this is a clean
+            # pre-content failover. (Reasoning-only responses keep the placeholder
+            # below — the model at least produced thinking.)
+            raise APIError("Provider returned an empty completion.", status_code=502)
         if not has_content_blocks or (
             not has_emitted_tool
             and not ledger.accumulated_text.strip()

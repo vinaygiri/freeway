@@ -202,6 +202,49 @@ async def test_native_stream_5xx_retry_exhausted(provider_config, status_code, s
 
 
 @pytest.mark.asyncio
+async def test_native_stream_429_fails_fast_for_failover(provider_config):
+    """A persistent 429 fails fast (1 retry → 2 attempts), NOT the full 5-attempt
+    backoff, so the request fails over to a fresh provider quickly instead of
+    burning ~30s on a rate-limited one."""
+    GlobalRateLimiter.reset_instance()
+    try:
+
+        @asynccontextmanager
+        async def _slot():
+            yield
+
+        with patch(
+            "providers.transports.anthropic_messages.transport.GlobalRateLimiter"
+        ) as mock_gl:
+            instance = mock_gl.get_scoped_instance.return_value
+            real = GlobalRateLimiter(rate_limit=100, rate_window=60, max_concurrency=5)
+            instance.wait_if_blocked = real.wait_if_blocked
+            instance.execute_with_retry = real.execute_with_retry
+            instance.set_blocked = real.set_blocked
+            instance.concurrency_slot.side_effect = _slot
+
+            provider = NativeProvider(provider_config)
+            req = MockRequest()
+            bad = FakeResponse(status_code=429, text="rate limited")
+
+            with (
+                patch.object(
+                    provider._client, "build_request", return_value=MagicMock()
+                ),
+                patch.object(
+                    provider._client, "send", new_callable=AsyncMock, return_value=bad
+                ) as mock_send,
+                patch("asyncio.sleep", new_callable=AsyncMock),
+                pytest.raises(ProviderError),
+            ):
+                [e async for e in provider.stream_response(req)]
+
+            assert mock_send.await_count == 2  # 1 attempt + 1 quick retry, then over
+    finally:
+        GlobalRateLimiter.reset_instance()
+
+
+@pytest.mark.asyncio
 async def test_non_retryable_4xx_http_error_not_retried(provider_config):
     """HTTP 400 from upstream is not retried; single send (passthrough limiter)."""
     GlobalRateLimiter.reset_instance()

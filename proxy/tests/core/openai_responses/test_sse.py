@@ -80,6 +80,39 @@ async def test_end_turn_stop_reason_reports_completed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_abnormal_cutoff_without_stop_reason_reports_incomplete() -> None:
+    # Upstream stream drops before any stop_reason OR message_stop (a dropped/early-
+    # closed connection). finish_if_needed must report incomplete — NOT a false
+    # "completed" that makes Codex silently stop mid-task.
+    cut = _anthropic_text_stream("partial")[:4]  # drop message_delta + message_stop
+    text = await _collect_sse(
+        _ADAPTER.iter_sse_from_anthropic(
+            _aiter(cut), {"model": "nvidia_nim/test-model", "stream": True}
+        )
+    )
+    events = parse_sse_text(text)
+    assert events[-1].event == "response.incomplete"
+    assert events[-1].data["response"]["status"] == "incomplete"
+    assert "response.completed" not in [e.event for e in events]
+
+
+@pytest.mark.asyncio
+async def test_end_turn_without_message_stop_still_completes() -> None:
+    # Stream ended without a message_stop, BUT the model reported end_turn — the
+    # content finished, so it must still be "completed" (don't false-incomplete a
+    # response that actually finished).
+    cut = _anthropic_text_stream("done")[:5]  # keep message_delta(end_turn), drop stop
+    text = await _collect_sse(
+        _ADAPTER.iter_sse_from_anthropic(
+            _aiter(cut), {"model": "nvidia_nim/test-model", "stream": True}
+        )
+    )
+    events = parse_sse_text(text)
+    assert events[-1].event == "response.completed"
+    assert events[-1].data["response"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_anthropic_tool_stream_converts_to_function_call_item() -> None:
     text = await _collect_sse(
         _ADAPTER.iter_sse_from_anthropic(

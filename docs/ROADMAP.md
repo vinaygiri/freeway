@@ -9,6 +9,34 @@ Node `corepack pnpm test`) — no git/remote needed.
 
 ---
 
+## Next up (post-launch, targeting v2.6.0)
+
+- [ ] **Live-verified "Recommended" models** — a *computed* recommendation (never a
+  static list, which would go stale). Rank models by the data we already have:
+  live **Verify** status (`model_probe`) × quality tier/SWE-bench (`model_quality`)
+  × context size × **provider diversity**. Surfaces:
+  - a **★ Recommended** filter on the Models page (verified-live + high-tier + enough context), and
+  - an optional **"Suggest a chain"** action that picks one strong *currently-live*
+    model from each of 2–3 **different** providers and one-click applies it
+    (bakes in the spread-across-providers rule).
+  - Self-updating from live verify + the quality catalog — no hardcoded best-list.
+  - *Deferred to a fast-follow so launch feedback can shape what "recommended" means.*
+
+- [ ] **Reliability hardening — round 3** (remaining items from the 2.5.4 audit;
+  the definitive stop-causes + empty-completion + fast-429-failover shipped in
+  2.5.4). These are rare-edge / hot-path robustness that need real-world data or
+  careful design to avoid *creating* new stops — deliberately not rushed pre-launch:
+  - **Total-request deadline / idle-gap watchdog**: the read timeout is per-read, so
+    a pathological slow-drip provider (a byte just under 120s, repeatedly) can stream
+    indefinitely. Needs an *upstream-progress* idle watchdog with a tuned threshold —
+    set too tight it kills slow-but-valid free-tier responses (new stops). Design
+    with real latency data.
+  - **Peek + recovery wall-clock bounds**: bound pre-content peek time and cap
+    mid-stream recovery wall-time so the first byte / graceful tail arrives promptly.
+  - **Concurrency-slot acquire timeout** (fail over when the local pool is saturated).
+
+---
+
 ## Milestone 0 — Scaffold  *(foundation)* ✅
 - [x] License + attribution setup (`LICENSE`, `NOTICE`, `LICENSES/`)
 - [x] Design docs (merge plan, differentiation, roadmap)

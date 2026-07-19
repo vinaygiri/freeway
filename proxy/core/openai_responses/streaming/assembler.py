@@ -70,7 +70,12 @@ class ResponsesStreamAssembler:
         if self.terminal:
             return []
         chunks = self._ensure_started()
-        chunks.extend(self.complete_response())
+        # Only reached when the upstream stream ended WITHOUT a clean message_stop —
+        # i.e. it was cut off (dropped connection, provider closed early). If the
+        # model never reported a stop_reason, treat it as truncated (incomplete) so
+        # the client (e.g. Codex) knows the turn didn't finish, instead of a false
+        # "completed" that makes it silently stop mid-task.
+        chunks.extend(self.complete_response(abnormal_end=True))
         return chunks
 
     def _capture_stop_reason(self, data: Mapping[str, Any]) -> None:
@@ -106,14 +111,18 @@ class ResponsesStreamAssembler:
             "error": error,
         }
 
-    def complete_response(self) -> list[str]:
+    def complete_response(self, *, abnormal_end: bool = False) -> list[str]:
         chunks = self._flush_active_blocks()
         if self.terminal:
             return chunks
-        if self._stop_reason == "max_tokens":
-            # The model was cut off by the output-token limit. Report the OpenAI
-            # ``incomplete`` status so the client (e.g. Codex) knows the turn was
-            # truncated — not a clean finish it should silently stop on.
+        # Truncated when the output-token limit was hit, OR the stream was cut off
+        # (abnormal end) before the model ever reported a stop_reason. Either way,
+        # report OpenAI ``incomplete`` so the client (e.g. Codex) knows the turn was
+        # not finished — instead of a false ``completed`` that makes it silently stop.
+        truncated = self._stop_reason == "max_tokens" or (
+            abnormal_end and self._stop_reason is None
+        )
+        if truncated:
             self.final_response = self.response_payload(
                 status="incomplete",
                 incomplete_details={"reason": "max_output_tokens"},

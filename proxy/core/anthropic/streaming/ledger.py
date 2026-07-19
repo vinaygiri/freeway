@@ -571,7 +571,11 @@ class AnthropicStreamLedger:
         return self.stop_reason is None and not self.message_stopped
 
     def final_stop_reason(self, fallback: str) -> str:
-        if self.has_emitted_tool_block():
+        # A tool call means stop_reason=tool_use — UNLESS the output was truncated
+        # (max_tokens). A truncated tool call must keep max_tokens so the client
+        # knows to continue, instead of executing a possibly-cut-off tool and
+        # moving on (a silent truncation).
+        if self.has_emitted_tool_block() and fallback != "max_tokens":
             return "tool_use"
         return fallback
 

@@ -36,6 +36,19 @@ class TestMapStopReason:
             (None, "end_turn"),
             ("unknown_value", "end_turn"),
             ("", "end_turn"),
+            # case-insensitive
+            ("LENGTH", "max_tokens"),
+            ("Stop", "end_turn"),
+            (" length ", "max_tokens"),
+            # non-standard truncation aliases must NOT mask as a clean stop
+            ("max_tokens", "max_tokens"),
+            ("MAX_TOKENS", "max_tokens"),
+            ("max_output_tokens", "max_tokens"),
+            ("model_length", "max_tokens"),
+            ("token_limit", "max_tokens"),
+            # non-standard tool aliases
+            ("function_call", "tool_use"),
+            ("tool_call", "tool_use"),
         ],
         ids=[
             "stop",
@@ -45,6 +58,16 @@ class TestMapStopReason:
             "none",
             "unknown",
             "empty_string",
+            "length_upper",
+            "stop_title",
+            "length_spaces",
+            "alias_max_tokens",
+            "alias_max_tokens_upper",
+            "alias_max_output_tokens",
+            "alias_model_length",
+            "alias_token_limit",
+            "alias_function_call",
+            "alias_tool_call",
         ],
     )
     def test_map_stop_reason(self, openai_reason, expected):

@@ -8,6 +8,14 @@
 
 `brand: Freeway` · `command: freeway` · `package: freeway-ai` · MIT licensed
 
+[![Python](https://img.shields.io/badge/python-3.14%2B-3776ab.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+<br>
+
+<img src="docs/demo.gif" alt="Freeway control center — dashboard, model picker, routing, and live failover in the request inspector" width="820">
+
 </div>
 
 ---
@@ -54,16 +62,20 @@ Freeway fixes all of that from **one local endpoint**:
 
 ## Quick start
 
-**1. Install** (installs uv, Python, Claude Code, Codex, and Freeway):
+**1. Install** — clone the repo and run the install script (provisions uv, Python, Claude Code, Codex, and Freeway):
 
 ```powershell
 # Windows
+git clone https://github.com/vinaygiri/freeway
 cd freeway\proxy; .\scripts\install.ps1
 ```
 ```bash
 # macOS / Linux
+git clone https://github.com/vinaygiri/freeway
 cd freeway/proxy && ./scripts/install.sh
 ```
+> A one-line `uv tool install freeway-ai` (PyPI) is coming soon.
+>
 > Open a **fresh terminal** afterwards so the new `freeway` commands are on your PATH.
 
 **2. Create config & start:**

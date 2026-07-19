@@ -28,7 +28,11 @@ from .data_governor import DataGovernor
 from .model_router import ResolvedModel
 from .quota_governor import QuotaGovernor
 
-DEFAULT_MAX_ATTEMPTS = 3
+# Walk the WHOLE configured fallback chain, not an arbitrary few — a user with
+# N fallback providers wants all N tried before a request gives up (that is the
+# "never stops" promise). This is a generous safety ceiling; the loop naturally
+# stops at the number of (deduped) candidates, so in practice it tries every one.
+DEFAULT_MAX_ATTEMPTS = 24
 _DEAD_VERDICT = "Not Active"
 
 ModelInfoLookup = Callable[[str, str], ProviderModelInfo | None]

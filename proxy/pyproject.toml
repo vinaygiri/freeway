@@ -4,10 +4,38 @@ build-backend = "hatchling.build"
 
 [project]
 name = "freeway-ai"
-version = "2.5.2"
+version = "2.5.4"
 description = "Freeway — one local endpoint routing Claude Code / Codex / OpenAI tools to many free AI models"
 readme = "README.md"
 requires-python = ">=3.14.0"
+authors = [{ name = "Giragouda (Vinay) Patil" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+    "claude-code",
+    "codex",
+    "anthropic",
+    "openai",
+    "llm",
+    "ai-coding-assistant",
+    "proxy",
+    "gateway",
+    "free-models",
+    "model-router",
+    "failover",
+    "cli",
+    "developer-tools",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Utilities",
+]
 dependencies = [
     "fastapi[standard]>=0.138.1",
     "uvicorn>=0.49.0",
@@ -31,6 +59,12 @@ freeway-server = "cli.entrypoints:serve"
 freeway-init = "cli.entrypoints:init"
 freeway-claude = "cli.launchers.claude:launch"
 freeway-codex = "cli.launchers.codex:launch"
+
+[project.urls]
+Homepage = "https://github.com/vinaygiri/freeway"
+Repository = "https://github.com/vinaygiri/freeway"
+Issues = "https://github.com/vinaygiri/freeway/issues"
+Changelog = "https://github.com/vinaygiri/freeway/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 voice = [

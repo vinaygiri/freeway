@@ -774,6 +774,11 @@ async function renderLimits() {
   });
   table.appendChild(tb);
   body.appendChild(table);
+  const note = el("p", "guide-note");
+  note.innerHTML = "Near 100%? Freeway routes away to your other providers and fails over at the cap "
+    + "(daily limits reset at UTC midnight). Keep favourites / fallbacks from <strong>2–3 different "
+    + "providers</strong> so a single provider's cap can't stop you.";
+  body.appendChild(note);
 }
 
 async function renderHealth() {
@@ -916,6 +921,13 @@ async function renderHelp() {
       accepts a request but then fails before producing any output (rate-limit, overload, 5xx, bad model),
       Freeway re-routes to the next model and still completes the response. With a few keys across providers,
       a run keeps going instead of dying on one provider's hiccup.</p></div>
+      <div class="guide-concept"><h4>Free-tier limits &amp; fallback (spread across providers)</h4>
+      <p>Each free provider has its own cap (e.g. <strong>OpenRouter = 50 requests/day</strong>, resets at UTC
+      midnight; see <em>Monitor → Limits</em> for live usage). As a provider nears its limit, Freeway routes
+      <em>away</em> to your other providers, and fails over at 100%. So pick your favourites / fallback chain
+      from <strong>2–3 different providers</strong> — if <em>every</em> model you select is from one provider,
+      then when that provider's cap is hit there's nowhere to fall back and requests stop until it resets. A
+      mixed chain (e.g. a big-context provider like Gemini + a couple of fast ones) keeps you running all day.</p></div>
       <div class="guide-concept"><h4>@-Directives (per-message model switching)</h4>
       <p>Define aliases in <em>Routing → Inline @-Directives</em> as <code>key=provider/model</code>, e.g.
       <span class="mono-example">fast=groq/llama-3.3-70b-versatile, big=cerebras/gpt-oss-120b</span>

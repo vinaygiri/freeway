@@ -21,13 +21,12 @@ Security fixes land on the latest `2.5.x` line. The current version is in
 
 **Please do not open a public GitHub issue for security problems.**
 
-Report privately through one of:
+Report privately via **GitHub Private Vulnerability Reporting**: on this
+repository, go to the **Security** tab → **Report a vulnerability**. This opens a
+private advisory that only you and the maintainers can see.
 
-1. **GitHub Private Vulnerability Reporting** (preferred) — on this repository, go
-   to the **Security** tab → **Report a vulnerability**. This opens a private
-   advisory only you and the maintainers can see.
-2. **Email** — `<INSERT-SECURITY-CONTACT-EMAIL>` (replace with your preferred
-   contact before publishing).
+> Maintainers: enable this under **Settings → Code security → Private
+> vulnerability reporting**.
 
 Please include:
 - A description of the issue and its impact.

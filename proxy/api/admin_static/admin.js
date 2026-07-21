@@ -356,6 +356,11 @@ async function renderModels() {
     verifyBtn.title = "Ping every model shown to check it's actually live (sends a tiny request to each — uses a little quota). Results are saved.";
     verifyBtn.addEventListener("click", verifyVisibleModels);
     verifyWrap.appendChild(verifyBtn);
+    const suggestBtn = el("button", "primary-button small", "★ Suggest a chain");
+    suggestBtn.id = "suggestChainBtn";
+    suggestBtn.title = "Pick the best live model per provider (live-verify × quality × context) and apply it as your primary + fallback chain — one click. Run ⚡ Verify all first for the sharpest picks.";
+    suggestBtn.addEventListener("click", suggestChain);
+    verifyWrap.appendChild(suggestBtn);
     toolbar.appendChild(verifyWrap);
     body.appendChild(toolbar);
     body.appendChild(el("p", "models-help",
@@ -674,6 +679,33 @@ async function toggleFavourite(ref) {
   const next = favs.includes(ref) ? favs.filter((r) => r !== ref) : [...favs, ref];
   if (state.modelsData) state.modelsData.favourites = next;
   if (await applyValues({ FAVOURITE_MODELS: next.join(",") })) { await renderModels(); }
+}
+
+async function suggestChain() {
+  if (state.modelsData && state.modelsData.model_locked) {
+    showMessage("Can't change the model — MODEL is set by an environment variable. Unset it and restart.", "error");
+    return;
+  }
+  const btn = byId("suggestChainBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "★ Thinking…"; }
+  try {
+    const res = await api("/admin/api/models/recommend");
+    const chain = (res && res.chain) || [];
+    if (!chain.length) {
+      showMessage("No recommendation yet — click ⚡ Verify all first so Freeway knows which models are live.", "warn");
+      return;
+    }
+    const [primary, ...fallbacks] = chain;
+    if (await applyValues({ MODEL: primary, MODEL_FALLBACKS: fallbacks.join(",") }, "Applying recommended chain…")) {
+      await renderModels();
+      showMessage(`Recommended chain applied — ${primary}${fallbacks.length ? " → " + fallbacks.join(" → ") : ""}`, "ok");
+    }
+  } catch {
+    showMessage("Couldn't build a recommendation right now.", "error");
+  } finally {
+    const b = byId("suggestChainBtn");
+    if (b) { b.disabled = false; b.textContent = "★ Suggest a chain"; }
+  }
 }
 
 // ---- Activity / Limits / Health / Cache ----

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/banner.svg" alt="Freeway — run Claude Code & Codex on 26 free AI providers, with auto-failover and quota-aware routing" width="100%">
+
 # 🚗💨 Freeway
 
 ### A free, smart route to many AI coding models.

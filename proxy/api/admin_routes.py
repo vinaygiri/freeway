@@ -17,6 +17,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from api.models.anthropic import MessagesRequest
+from api.recommend import recommend as recommend_models
+from api.recommend import suggest_chain
 from config.model_quality import quality_for
 from config.model_refs import parse_provider_type
 from config.paths import config_dir_path
@@ -530,6 +532,39 @@ async def _ping_model(
     verdict = classify_probe(chunks, raised)
     verdict["latency_ms"] = round((perf_counter() - started) * 1000)
     return verdict
+
+
+@router.get("/admin/api/models/recommend")
+async def recommend_models_route(request: Request):
+    """Rank discovered models (live-verify x quality x context) and propose a
+    provider-diversified fallback chain to apply in one click."""
+    require_loopback_admin(request)
+    runtime = getattr(request.app.state, "provider_runtime", None)
+    pairs: list[tuple[str, str]] = []
+    if isinstance(runtime, ProviderRuntime):
+        for provider_id, model_ids in runtime.cached_model_ids().items():
+            pairs.extend((provider_id, model_id) for model_id in model_ids)
+    probes = _probe_store(request).snapshot()
+
+    def probe_getter(provider_id: str, model_id: str):
+        return probes.get(f"{provider_id}/{model_id}")
+
+    ranked = recommend_models(pairs, probe_getter=probe_getter, limit=12)
+    chain = suggest_chain(pairs, probe_getter=probe_getter, max_models=4)
+    return {
+        "chain": chain,
+        "recommended": [
+            {
+                "ref": s.ref,
+                "score": s.score,
+                "tier": s.tier,
+                "liveness": s.liveness,
+                "context_tokens": s.context_tokens,
+                "reasons": s.reasons,
+            }
+            for s in ranked
+        ],
+    }
 
 
 @router.post("/admin/api/models/ping")

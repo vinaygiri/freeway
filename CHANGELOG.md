@@ -5,6 +5,33 @@ All notable changes to Freeway are documented here. The format is based on
 [Semantic Versioning](https://semver.org/) (the version lives in
 `proxy/pyproject.toml`).
 
+## [2.7.0] — 2026-07-20 · Freeway as a Python library
+
+### Added
+- **`from freeway import Freeway` — the routing core is now an importable library, not
+  just a proxy server.** Get cross-provider failover, multi-key rotation, and tool-schema
+  compression *inside your own Python app or agent*:
+  ```python
+  from freeway import Freeway
+  fw = Freeway(primary="gemini/models/gemini-2.5-flash",
+               fallbacks=["cerebras/gpt-oss-120b"],
+               keys={"gemini": "...", "cerebras": "..."})
+  c = fw.chat(messages=[{"role": "user", "content": "Hello"}])
+  print(c.text, c.served_model, c.was_fallback)   # failover is observable
+  ```
+- Sync (`chat`) and async (`achat`), plus streaming (`astream` yields text/tool-call/done
+  events). Returns a `Completion` that surfaces which model actually answered
+  (`served_model`), whether it failed over (`was_fallback`), stop reason, and token counts.
+- The `freeway` proxy server is now a front-end over this same library core (same routing
+  decisions, same code path) — see `docs/LIBRARY_API_DESIGN.md` and
+  `examples/library_quickstart.py`.
+- **Live-verified model recommendation** (`api/recommend.py`, exposed as `fw.recommend()` and
+  `fw.suggest_chain()`). Ranks models by combining **live probe status** (does it work right
+  now) × **quality tier** × **context size** — deliberately *not* a static "best models" list,
+  so it never goes stale. `suggest_chain()` proposes a **provider-diversified** fallback chain
+  (one model per provider) so exhausting one provider's quota falls over to a different one.
+  Verified-down models are never recommended; scores are explainable (`ModelScore.reasons`).
+
 ## [2.6.0] — 2026-07-19 · tool-schema compression (fit more on free tiers)
 
 ### Added

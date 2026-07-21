@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Freeway — run Claude Code and Codex on 26 free AI providers, with auto-failover and quota-aware routing">
+  <defs>
+    <linearGradient id="fw-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08120e"/>
+      <stop offset="0.55" stop-color="#0b1f17"/>
+      <stop offset="1" stop-color="#0e2a1f"/>
+    </linearGradient>
+    <linearGradient id="fw-ink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f3fbf7"/>
+      <stop offset="1" stop-color="#c7f5e0"/>
+    </linearGradient>
+    <linearGradient id="fw-logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2ee6a6"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <radialGradient id="fw-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2ee6a6" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#2ee6a6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="340" fill="url(#fw-bg)"/>
+  <circle cx="1020" cy="150" r="240" fill="url(#fw-glow)"/>
+  <text x="46" y="44" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="16" fill="#5fd6a6" letter-spacing="1">⛽ make free last · MIT · runs local</text>
+  <rect x="46" y="100" width="130" height="130" rx="30" fill="url(#fw-logo)"/>
+  <text x="111" y="188" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-size="56" font-weight="800" fill="#08120e">FW</text>
+  <text x="212" y="166" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="94" font-weight="800" fill="url(#fw-ink)" letter-spacing="-2">Freeway</text>
+  <text x="216" y="214" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="500" fill="#b7c6be">Run <tspan fill="#2ee6a6" font-weight="700">Claude Code &amp; Codex</tspan> on <tspan fill="#2ee6a6" font-weight="700">26 free</tspan> AI providers</text>
+  <text x="216" y="266" font-family="'JetBrains Mono','Cascadia Code',Consolas,monospace" font-size="19" fill="#6f9584">one gateway · auto-failover · quota-aware routing · never stops</text>
+</svg>
